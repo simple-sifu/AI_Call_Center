@@ -1,0 +1,42 @@
+# The initiative's epics, in build order.
+
+[[epic]]
+id = 1
+slug = "epic-platform-baseline"
+title = "Platform baseline and stub pipeline"
+covers = []
+
+[[epic]]
+id = 2
+slug = "epic-audio-intake-transcription"
+title = "Audio intake and transcription"
+covers = ["CAP-1", "CAP-2"]
+after = [{ epic = 1, needs = "pipeline state contract and graph stage slots" }]
+
+[[epic]]
+id = 3
+slug = "epic-transcript-safety"
+title = "Transcript safety"
+covers = ["CAP-3", "CAP-4"]
+after = [{ epic = 1, needs = "transcript segment format in the state contract" }]
+
+[[epic]]
+id = 4
+slug = "epic-llm-analysis"
+title = "LLM analysis and provider switching"
+covers = ["CAP-8", "CAP-5", "CAP-6"]
+after = [{ epic = 1, needs = "state contract: summary and score schemas" }, { epic = 3, needs = "screened, redacted transcript in state" }]
+
+[[epic]]
+id = 5
+slug = "epic-reports-audit"
+title = "Reports and audit trail"
+covers = ["CAP-7"]
+after = [{ epic = 4, needs = "summary and QA score results in state" }]
+
+[[epic]]
+id = 6
+slug = "epic-gradio-app"
+title = "Gradio app"
+covers = ["CAP-9", "CAP-10"]
+after = [{ epic = 5, needs = "persisted call records and audit data" }]

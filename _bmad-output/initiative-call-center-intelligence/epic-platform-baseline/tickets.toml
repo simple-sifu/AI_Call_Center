@@ -1,0 +1,12 @@
+# Epic 1 breakdown. The full set is planned at inception; entry 1 holds the shared contract.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Pipeline state contract"
+description = "Defines the typed pipeline state every stage reads and writes: transcript segments (speaker, start, end, text), summary, dimension scores, per-stage audit events, and blocked/failed status."
+verify = "The models import and validate sample fixtures in unit tests, and the user signs off on the contract."
+covers = []
+after = []
+hitl = true
+risk = "medium"
