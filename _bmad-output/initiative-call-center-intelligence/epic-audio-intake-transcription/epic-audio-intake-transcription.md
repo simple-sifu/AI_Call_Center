@@ -5,7 +5,7 @@ parent: initiative-call-center-intelligence
 covers: [CAP-1, CAP-2]
 after: []
 assignee: ""
-status: in-progress
+status: done
 risk: high
 ---
 
@@ -55,3 +55,4 @@ Stages 1 and 2 only. Not screening, redaction, or any LLM call.
 - Decision: fixtures are generated with macOS `say` (two-voice stereo plus mono) and committed, so CI needs no real recording (approved with the breakdown, 2026-10-11).
 - Decision: Refactor sweep closes the epic (approved with the breakdown, 2026-10-11).
 - Waits on epic-platform-baseline because: it needs the state contract and the stage slots.
+- Decision: Epic 2 closed after the closure check met all five Done when items (user confirmed, 2026-10-11).
