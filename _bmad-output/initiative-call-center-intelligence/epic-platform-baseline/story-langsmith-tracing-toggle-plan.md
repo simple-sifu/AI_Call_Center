@@ -3,7 +3,7 @@ title: 'LangSmith tracing toggle'
 type: 'feature'
 ticket: '5'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '4a51accab22e5a6688cc46e02ea21b2d10de65e4'
 route: 'oneshot'
 route_source: 'auto'
