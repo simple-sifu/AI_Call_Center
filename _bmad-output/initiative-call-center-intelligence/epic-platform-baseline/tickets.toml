@@ -1,12 +1,67 @@
-# Epic 1 breakdown. The full set is planned at inception; entry 1 holds the shared contract.
+# Epic 1 breakdown, in build order. Table order is build order; ids are permanent names.
+
+[[entry]]
+id = 2
+type = "story"
+title = "Tracer: scaffold and stub pipeline"
+description = "Sets up pyproject (Python 3.11-3.12, uv), rebuilds .venv on 3.12, a call_center package with one module per stage (7 stubs), the LangGraph graph wiring them in order, an `analyze <file>` CLI, pytest unit/integration/security folders with markers, and ruff config; the sample WAV fixture is generated in code."
+verify = "`uv run call-center analyze tests/fixtures/sample.wav` writes a JSON report listing all 7 stages in order, and `uv run pytest` and `uv run ruff check` pass."
+covers = ["B1", "B2", "B4"]
+after = []
+hitl = false
+risk = "low"
 
 [[entry]]
 id = 1
 type = "story"
 title = "Pipeline state contract"
-description = "Defines the typed pipeline state every stage reads and writes: transcript segments (speaker, start, end, text), summary, dimension scores, per-stage audit events, and blocked/failed status."
-verify = "The models import and validate sample fixtures in unit tests, and the user signs off on the contract."
-covers = []
-after = []
+description = "Defines the typed Pydantic state every stage reads and writes: transcript segments (speaker, start, end, text), summary, five dimension scores and overall, per-stage audit events, and blocked/failed status; updates the stub stages to use it and leaves the CLI and config untouched."
+verify = "Unit tests validate sample data against each model, and the user signs off on the contract."
+covers = ["B3"]
+after = [2]
 hitl = true
 risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Configuration"
+description = "Adds a pydantic-settings model loading .env for LLM_PROVIDER, API keys, WHISPER_MODEL_SIZE, and LangSmith variables, a .env.example, and wires settings into the CLI; it does not touch the state models or stages."
+verify = "Unit tests show defaults apply, env overrides work, and invalid values fail with a clear message."
+covers = ["B5"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "CI"
+description = "Adds a GitHub Actions workflow running ruff check and pytest on Python 3.11 and 3.12, with no model downloads or API keys."
+verify = "A push to main shows the workflow passing on both versions."
+covers = ["B7"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "LangSmith tracing toggle"
+description = "Turns on LangSmith tracing when its settings are present and keeps it off otherwise, using the settings from entry 3."
+verify = "Without a key a run succeeds and a test asserts tracing is off; with the user's key the run appears as a trace in LangSmith."
+covers = ["B6"]
+after = [3]
+hitl = true
+risk = "low"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup only across the epic, scoped when it starts from the plans and deferred review findings."
+verify = "pytest and ruff pass with no behavior change."
+covers = []
+after = [1, 3, 4, 5]
+hitl = false
+risk = "low"
