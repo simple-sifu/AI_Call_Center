@@ -3,7 +3,7 @@ title: 'Configuration'
 type: 'feature'
 ticket: '3'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '7e4603f0854b88ed53ebca41dd7c5de15129ab3d'
 route: 'full'
 route_source: 'auto'
