@@ -21,3 +21,18 @@ class PipelineState(TypedDict):
     audit: Annotated[list[AuditEvent], operator.add]
     status: RunStatus
     status_reason: str | None
+
+
+def initial_state(source_file: str) -> PipelineState:
+    """The state a run starts from: every value field empty, status ``running``."""
+    return PipelineState(
+        source_file=str(source_file),
+        stages_completed=[],
+        transcript=None,
+        redacted_transcript=None,
+        summary=None,
+        qa_scores=None,
+        audit=[],
+        status="running",
+        status_reason=None,
+    )
