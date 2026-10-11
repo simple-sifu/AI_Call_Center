@@ -14,3 +14,14 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         for marker in _MARKERS:
             if marker in parts:
                 item.add_marker(getattr(pytest.mark, marker))
+
+
+@pytest.fixture(autouse=True)
+def _isolated_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep tests independent of the developer's shell and real ``.env``."""
+    from call_center.config import ENV_VARS, Settings
+
+    for name in ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(name.lower(), raising=False)
+    monkeypatch.setitem(Settings.model_config, "env_file", None)

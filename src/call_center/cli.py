@@ -5,6 +5,9 @@ import json
 import sys
 from pathlib import Path
 
+from pydantic import ValidationError
+
+from call_center.config import format_config_error, load_settings
 from call_center.graph import run_pipeline
 
 
@@ -19,6 +22,11 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    try:
+        load_settings()
+    except ValidationError as error:
+        print(f"invalid configuration: {format_config_error(error)}", file=sys.stderr)
+        return 2
     source = Path(args.file)
     if not source.exists():
         print(f"file not found: {args.file}", file=sys.stderr)
