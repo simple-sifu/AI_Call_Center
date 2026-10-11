@@ -37,6 +37,16 @@ def _isolated_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(Settings.model_config, "env_file", None)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_transcript_cache(
+    _isolated_config: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    """Point the transcript cache under ``tmp_path`` so no test writes to the repo."""
+    cache_dir = tmp_path / "transcript-cache"
+    monkeypatch.setenv("TRANSCRIPT_CACHE_DIR", str(cache_dir))
+    return cache_dir
+
+
 class _SilentTranscriber:
     """Fake ASR that hears no speech; tests needing segments patch their own."""
 

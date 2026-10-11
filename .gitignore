@@ -22,3 +22,6 @@ _bmad/render/
 
 # Pipeline output
 reports/
+
+# Local caches (transcript cache holds unredacted call text)
+.cache/

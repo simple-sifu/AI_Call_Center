@@ -4,6 +4,7 @@ API keys are optional here; the provider factory (Epic 4) enforces the key for t
 selected provider. Keys are ``SecretStr`` so they never appear in repr or errors.
 """
 
+from pathlib import Path
 from typing import Literal, get_args
 
 from pydantic import AliasChoices, Field, SecretStr, ValidationError
@@ -12,6 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 LLMProvider = Literal["openai", "gemini", "groq"]
 WhisperModelSize = Literal["tiny", "base", "small", "medium", "large-v3"]
 AgentChannel = Literal["left", "right"]
+CacheMode = Literal["on", "off"]
 
 
 class Settings(BaseSettings):
@@ -29,6 +31,12 @@ class Settings(BaseSettings):
         "tiny", validation_alias=AliasChoices("WHISPER_MODEL_SIZE")
     )
     agent_channel: AgentChannel = Field("left", validation_alias=AliasChoices("AGENT_CHANNEL"))
+
+    # Raw ASR segments keyed by audio SHA-256 and model size; relative to the working dir.
+    transcript_cache: CacheMode = Field("on", validation_alias=AliasChoices("TRANSCRIPT_CACHE"))
+    transcript_cache_dir: Path = Field(
+        Path(".cache/transcripts"), validation_alias=AliasChoices("TRANSCRIPT_CACHE_DIR")
+    )
 
     openai_model: str = Field("gpt-4o", validation_alias=AliasChoices("OPENAI_MODEL"))
     gemini_model: str = Field("gemini-2.0-flash", validation_alias=AliasChoices("GEMINI_MODEL"))
