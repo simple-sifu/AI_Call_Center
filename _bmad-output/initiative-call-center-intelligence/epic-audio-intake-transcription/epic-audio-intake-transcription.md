@@ -48,6 +48,7 @@ Stages 1 and 2 only. Not screening, redaction, or any LLM call.
 ## Notes
 
 - Decision: speaker labeling is decided by spike 2.2 (pyannote vs. split by channel) before story 2.3 starts (user's decision, 2026-10-11).
+- Decision: speaker labeling splits by channel, variant A: transcribe the mix once, label each segment by its louder channel; labels `agent` (left) and `customer` (right), with the channel mapping configurable in settings; mono audio gets one label and an audit note. pyannote is not used (user's decision after spike 2.2, 2026-10-11).
 - Decision: a rejected file sets status `failed` with a reason; the report and audit trail are still written; the CLI prints `rejected: <reason>` and exits 2 (approved with the breakdown, 2026-10-11).
 - Decision: the transcript cache is file-based under `.cache/transcripts/`, keyed by audio SHA-256 plus model size; SQLite stays with Epic 5 (approved with the breakdown, 2026-10-11).
 - Decision: accepted formats are WAV, MP3, FLAC, OGG, M4A (approved with the breakdown, 2026-10-11).

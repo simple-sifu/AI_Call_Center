@@ -26,13 +26,12 @@ risk = "medium"
 id = 3
 type = "story"
 title = "Speaker labeling"
-description = "Labels each transcript segment with its speaker using the approach chosen in spike 2.2."
-verify = "The stereo fixture's two voices come out as two distinct speakers, with each segment assigned to the right one."
+description = "Labels each transcript segment by channel energy (spike 2.2, variant A): transcribe the mix once, assign each segment to the louder channel in its window, labelled agent (left) or customer (right) via a configurable channel mapping; mono audio gets one label and an audit note."
+verify = "The stereo fixture's turns come out as agent, customer, agent, customer, including with 30% simulated crosstalk; the mono fixture gets one label with the audit note."
 covers = ["R3"]
 after = [2]
 hitl = false
 risk = "medium"
-unknown = "Which speaker-labeling approach spike 2.2 selects; remove once the user's decision is recorded."
 
 [[entry]]
 id = 4
