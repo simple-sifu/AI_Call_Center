@@ -110,3 +110,56 @@ def test_cli_without_key_succeeds_with_tracing_off(tmp_path, monkeypatch):
     assert ls_utils.tracing_is_enabled() is False
     ls_utils.get_env_var.cache_clear()
     assert os.environ["LANGSMITH_TRACING"] == "false"
+
+
+def test_cli_rejected_file_writes_report_and_exits_2(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    fake = tmp_path / "fake.wav"
+    fake.write_text("meeting notes, not audio\n")
+    assert main(["analyze", str(fake)]) == 2
+    out = Path("reports") / "fake.json"
+    captured = capsys.readouterr()
+    assert captured.out.strip() == str(out)
+    assert captured.err.startswith("rejected: unsupported format")
+    assert captured.err.count("\n") == 1
+    report = json.loads(out.read_text())
+    assert report["source_file"] == str(fake)
+    assert report["stages_completed"] == ["intake", "report"]
+
+
+def test_cli_transcription_failure_exits_2(tmp_path, monkeypatch, capsys):
+    from call_center import asr
+
+    class Broken:
+        def transcribe(self, path):
+            raise RuntimeError("model exploded")
+
+    monkeypatch.setattr(asr, "get_transcriber", lambda model_size: Broken())
+    assert main(["analyze", str(SAMPLE), "--out", str(tmp_path)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out.strip() == str(tmp_path / "sample.json")
+    assert captured.err.strip() == "transcription failed: RuntimeError: model exploded"
+    assert json.loads((tmp_path / "sample.json").read_text())["stages_completed"] == [
+        "intake",
+        "transcription",
+        "report",
+    ]
+
+
+def test_cli_blocked_run_exits_2(tmp_path, monkeypatch, capsys):
+    from call_center.stages import injection_detection
+
+    def blocked(state):
+        return {
+            "stages_completed": [injection_detection.NAME],
+            "status": "blocked",
+            "status_reason": "prompt injection detected",
+            "audit": [AuditEvent(stage=injection_detection.NAME, outcome="blocked")],
+        }
+
+    monkeypatch.setattr(injection_detection, "run", blocked)
+    assert main(["analyze", str(SAMPLE), "--out", str(tmp_path)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out.strip() == str(tmp_path / "sample.json")
+    assert captured.err.strip() == "blocked: prompt injection detected"
+    assert (tmp_path / "sample.json").exists()
