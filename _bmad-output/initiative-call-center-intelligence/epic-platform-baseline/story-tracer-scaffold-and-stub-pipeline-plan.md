@@ -3,7 +3,7 @@ title: 'Tracer: scaffold and stub pipeline'
 type: 'feature'
 ticket: '2'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '119c5d564c035109d8f1673c84750ab96b85f41d'
 route: 'full'
 route_source: 'auto'
