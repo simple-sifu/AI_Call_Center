@@ -39,7 +39,11 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr | None = Field(None, validation_alias=AliasChoices("GROQ_API_KEY"))
 
     langsmith_tracing: bool = Field(
-        False, validation_alias=AliasChoices("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2")
+        False,
+        # Same names and precedence as langsmith's own lookup (TRACING_V2 before TRACING).
+        validation_alias=AliasChoices(
+            "LANGSMITH_TRACING_V2", "LANGCHAIN_TRACING_V2", "LANGSMITH_TRACING", "LANGCHAIN_TRACING"
+        ),
     )
     langsmith_api_key: SecretStr | None = Field(
         None, validation_alias=AliasChoices("LANGSMITH_API_KEY", "LANGCHAIN_API_KEY")

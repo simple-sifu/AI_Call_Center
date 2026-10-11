@@ -21,7 +21,10 @@ def _isolated_config(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep tests independent of the developer's shell and real ``.env``."""
     from call_center.config import ENV_VARS, Settings
 
+    # setenv then delenv records each name, so anything a test (or the CLI) writes to
+    # os.environ is undone afterwards, even for names that were not set before.
     for name in ENV_VARS:
-        monkeypatch.delenv(name, raising=False)
-        monkeypatch.delenv(name.lower(), raising=False)
+        for variant in (name, name.lower()):
+            monkeypatch.setenv(variant, "")
+            monkeypatch.delenv(variant)
     monkeypatch.setitem(Settings.model_config, "env_file", None)
