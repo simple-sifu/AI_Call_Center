@@ -5,6 +5,7 @@ parent: initiative-call-center-intelligence
 covers: []
 after: []
 assignee: ""
+status: done
 risk: medium
 ---
 
@@ -53,3 +54,4 @@ Scaffold, config, the graph skeleton, the state contract, and tracing. No real s
 - Source conflict: spec Constraints say Python 3.11 or 3.12 vs the existing .venv on Python 3.14.6; entry 2 rebuilds it on 3.12 (3.12.13 is installed).
 - Decision: uv as the package manager and pydantic-settings for configuration (approved with the breakdown, 2026-10-10).
 - Decision: Refactor sweep closes the epic (approved with the breakdown, 2026-10-10).
+- Decision: Epic 1 closed after the closure check met all five Done when items (user confirmed, 2026-10-11).
