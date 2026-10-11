@@ -97,3 +97,16 @@ def test_cli_invalid_config_exits_2(tmp_path, monkeypatch, capsys, var, value, a
         assert name in captured.err
     assert value not in captured.err
     assert list(tmp_path.iterdir()) == []
+
+
+def test_cli_without_key_succeeds_with_tracing_off(tmp_path, monkeypatch):
+    import os
+
+    from langsmith import utils as ls_utils
+
+    monkeypatch.setenv("LANGSMITH_TRACING_V2", "true")
+    assert main(["analyze", str(SAMPLE), "--out", str(tmp_path)]) == 0
+    ls_utils.get_env_var.cache_clear()
+    assert ls_utils.tracing_is_enabled() is False
+    ls_utils.get_env_var.cache_clear()
+    assert os.environ["LANGSMITH_TRACING"] == "false"

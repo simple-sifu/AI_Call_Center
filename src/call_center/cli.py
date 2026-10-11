@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from call_center.config import format_config_error, load_settings
 from call_center.graph import run_pipeline
+from call_center.tracing import configure_tracing, flush_traces
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -23,7 +24,7 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        load_settings()
+        settings = load_settings()
     except ValidationError as error:
         print(f"invalid configuration: {format_config_error(error)}", file=sys.stderr)
         return 2
@@ -35,7 +36,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"not a file: {Path(args.file)}", file=sys.stderr)
         return 2
 
-    state = run_pipeline(str(source))
+    tracing = configure_tracing(settings)
+    try:
+        state = run_pipeline(str(source))
+    finally:
+        if tracing:
+            flush_traces()
     report = {
         "source_file": state["source_file"],
         "status": "stub",

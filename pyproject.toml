@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "AI call center intelligence pipeline"
 requires-python = ">=3.11,<3.13"
 dependencies = [
+    "langchain-core>=1.6.9",
     "langgraph",
     "pydantic>=2",
     "pydantic-settings>=2.15.0",
