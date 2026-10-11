@@ -3,7 +3,7 @@ title: 'Transcript cache'
 type: 'feature'
 ticket: '4'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: 'f67e09645c4be3154463a1c4fa618405906f8349'
 route: 'full'
 route_source: 'auto'
