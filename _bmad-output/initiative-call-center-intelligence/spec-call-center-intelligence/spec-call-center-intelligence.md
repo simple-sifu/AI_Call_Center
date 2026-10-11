@@ -25,19 +25,19 @@ Pain plus mandate. A mid-size call center takes ~5,000 calls/day; QA staff manua
   - **success:** The transcript segments carry speaker labels; resubmitting byte-identical audio returns the cached transcript (SHA-256 match) without running transcription again.
 - **CAP-3** Injection detection
   - **intent:** The system blocks adversarial content in a transcript before any LLM sees it.
-  - **success:** A transcript matching any of the 22 injection patterns stops the pipeline, and a test proves the LLM client is never invoked.
+  - **success:** A transcript matching any of the 22 injection patterns blocks the call: the remaining analysis stages are skipped and a test proves the LLM client is never invoked. The report stage still records the call with the block reason and its audit trail.
 - **CAP-4** PII redaction
   - **intent:** The system removes SSNs, credit card numbers, emails, and phone numbers from the transcript before any LLM call (GDPR/CCPA).
   - **success:** For a transcript seeded with each PII type, the text sent to the LLM contains none of them.
 - **CAP-5** Structured summary
-  - **intent:** A QA user gets a structured summary of each call: purpose, action items, sentiment trajectory, entities.
+  - **intent:** A QA user gets a structured summary of each call: purpose, action items, a sentiment trajectory over three phases (opening, middle, closing; each negative, neutral, or positive), and entities.
   - **success:** The output validates against the summary schema; schema-invalid LLM output is rejected or retried, never passed on silently.
 - **CAP-6** QA scoring
   - **intent:** Each call is scored on five weighted dimensions, with an overall score that cannot drift with the LLM.
-  - **success:** For any set of dimension scores, the overall equals the fixed weighted sum computed in Python; an overall supplied by the LLM is ignored even when it differs.
+  - **success:** Each dimension is an integer from 1 to 10 with a rationale. For any set of dimension scores, the overall equals `round(weighted mean × 10, 1)` (10.0–100.0), computed in Python; an overall supplied by the LLM is ignored even when it differs.
 - **CAP-7** Report and audit trail
   - **intent:** Each analyzed call yields a downloadable PDF and JSON report, a persisted record, and an append-only audit trail.
-  - **success:** After analysis, the PDF and JSON exist, the call's row is in SQLite, and audit entries exist for each stage; the application exposes no path to update or delete audit entries.
+  - **success:** After analysis, including a blocked or failed one, the PDF and JSON exist, the call's row is in SQLite, and audit entries exist for each stage that ran; the application exposes no path to update or delete audit entries.
 - **CAP-8** Provider switching
   - **intent:** An operator switches the LLM between OpenAI, Gemini, and Groq by changing one environment variable.
   - **success:** The same pipeline completes against each provider with only that variable changed, and no code edits.
@@ -50,7 +50,8 @@ Pain plus mandate. A mid-size call center takes ~5,000 calls/day; QA staff manua
 
 ## Constraints
 
-- QA weights are fixed: Professionalism 15%, Empathy 20%, Resolution 30%, Compliance 20%, Clarity 15%.
+- QA weights are fixed: Professionalism 15%, Empathy 20%, Resolution 30%, Compliance 20%, Clarity 15%. Dimensions are scored 1–10; overall = round(weighted mean × 10, 1).
+- Stages exchange data only through the approved pipeline state contract (`src/call_center/models.py`, `src/call_center/state.py`); LLM stages read only the redacted transcript.
 - No LLM receives a transcript before injection screening (CAP-3) and PII redaction (CAP-4) have both passed.
 - The pipeline is a 7-stage LangGraph graph: Intake → Transcription → Injection Detection → PII Redaction → Summarization → QA Scoring → Report (see `pipeline-diagram.md`).
 - Python 3.11 or 3.12 only; not 3.13.
@@ -84,9 +85,8 @@ Pain plus mandate. A mid-size call center takes ~5,000 calls/day; QA staff manua
 ## Open Questions
 
 - Diarization: faster-whisper has none built in. Which tool (e.g. pyannote, which needs a Hugging Face token) or heuristic should provide it?
-- What are the 22 injection patterns, and does a match reject the call or flag it in the report?
+- What are the 22 injection patterns? (A match blocks the call; decided.)
 - Compliance dimension: which required disclosures are checked, and for which industry?
 - PII scope beyond SSN, card, email, and phone (names, addresses, date of birth, account numbers, PHI)? Are raw audio and unredacted transcripts stored in the cache or the database?
-- What scale do the dimension scores use (0–100? 1–10?), and how is the overall rounded?
 - Observability dashboard: which metrics (stage latency, tokens/cost, provider, error rate, score distribution)?
 - How should LLM retries, timeouts, and malformed output be handled per provider?
