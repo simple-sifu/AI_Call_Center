@@ -3,7 +3,7 @@ title: 'Tracer: real transcription'
 type: 'feature'
 ticket: '1'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: 'd23089eaade67cb307a1ff3af6f4c7318914527c'
 route: 'full'
 route_source: 'auto'

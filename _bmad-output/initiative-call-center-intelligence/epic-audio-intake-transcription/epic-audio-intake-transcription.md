@@ -5,6 +5,7 @@ parent: initiative-call-center-intelligence
 covers: [CAP-1, CAP-2]
 after: []
 assignee: ""
+status: in-progress
 risk: high
 ---
 
