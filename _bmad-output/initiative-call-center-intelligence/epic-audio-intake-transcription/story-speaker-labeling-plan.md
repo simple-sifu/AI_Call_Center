@@ -3,7 +3,7 @@ title: 'Speaker labeling'
 type: 'feature'
 ticket: '3'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: '335a6590bde370ab2e97252f61855b05000ac20a'
 route: 'full'
 route_source: 'auto'
