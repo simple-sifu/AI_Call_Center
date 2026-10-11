@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "AI call center intelligence pipeline"
 requires-python = ">=3.11,<3.13"
 dependencies = [
+    # PyAV 19 dropped av.open(metadata_errors=...), which faster-whisper 1.2.1 passes.
+    "av>=11,<19",
+    "faster-whisper>=1.2.1",
     "langchain-core>=1.6.9",
     "langgraph",
     "pydantic>=2",
@@ -30,9 +33,10 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers"
+addopts = "--strict-markers -m 'not slow'"
 markers = [
     "unit: fast isolated tests",
     "integration: tests that run the pipeline end to end",
     "security: tests that guard security constraints",
+    "slow: loads a real ASR model; opt in with -m slow",
 ]

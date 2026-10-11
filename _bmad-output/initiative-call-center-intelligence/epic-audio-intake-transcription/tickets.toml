@@ -53,6 +53,7 @@ description = "Replaces the intake stub: detects WAV, MP3, FLAC, OGG, and M4A by
 verify = "Tests reject a renamed non-audio file, a file over 50 MB, and one over 60 minutes with clear reasons, and accept a valid file in each format."
 covers = ["R1", "R2"]
 after = [1]
+references = ["_bmad-output/initiative-call-center-intelligence/deferred-work.md"]
 hitl = false
 risk = "low"
 

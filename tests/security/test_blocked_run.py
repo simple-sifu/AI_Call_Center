@@ -18,7 +18,9 @@ def test_blocked_at_injection_skips_to_report(monkeypatch, tmp_path):
         }
 
     monkeypatch.setattr(injection_detection, "run", blocked)
-    state = run_pipeline(str(tmp_path / "call.wav"))
+    call = tmp_path / "call.wav"
+    call.write_bytes(b"")  # transcription now reads the file; the fake ASR ignores content
+    state = run_pipeline(str(call))
 
     assert state["stages_completed"] == [
         "intake",
