@@ -3,7 +3,10 @@ name = "call-center"
 version = "0.1.0"
 description = "AI call center intelligence pipeline"
 requires-python = ">=3.11,<3.13"
-dependencies = ["langgraph"]
+dependencies = [
+    "langgraph",
+    "pydantic>=2",
+]
 
 [project.scripts]
 call-center = "call_center.cli:main"

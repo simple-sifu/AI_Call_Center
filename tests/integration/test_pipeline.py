@@ -3,6 +3,7 @@ from pathlib import Path
 
 from call_center.cli import main
 from call_center.graph import run_pipeline
+from call_center.models import AuditEvent, QAScores, Summary, Transcript
 
 SAMPLE = Path(__file__).parent.parent / "fixtures" / "sample.wav"
 EXPECTED = [
@@ -20,6 +21,25 @@ def test_run_pipeline_completes_stages_in_order():
     state = run_pipeline(str(SAMPLE))
     assert state["stages_completed"] == EXPECTED
     assert state["source_file"] == str(SAMPLE)
+
+
+def test_run_pipeline_final_state_matches_contract():
+    state = run_pipeline(str(SAMPLE))
+    for key, model in [
+        ("transcript", Transcript),
+        ("redacted_transcript", Transcript),
+        ("summary", Summary),
+        ("qa_scores", QAScores),
+    ]:
+        assert isinstance(state[key], model), key
+        model.model_validate(state[key].model_dump(), strict=False)
+    assert state["status"] == "completed"
+    assert state["status_reason"] is None
+    assert len(state["audit"]) == 7
+    for event, name in zip(state["audit"], EXPECTED, strict=True):
+        assert isinstance(event, AuditEvent)
+        AuditEvent.model_validate(event.model_dump())
+        assert (event.stage, event.outcome) == (name, "ok")
 
 
 def test_cli_happy_path_writes_report(tmp_path, monkeypatch, capsys):

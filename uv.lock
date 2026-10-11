@@ -34,6 +34,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "langgraph" },
+    { name = "pydantic" },
 ]
 
 [package.dev-dependencies]
@@ -43,7 +44,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "langgraph" }]
+requires-dist = [
+    { name = "langgraph" },
+    { name = "pydantic", specifier = ">=2" },
+]
 
 [package.metadata.requires-dev]
 dev = [
