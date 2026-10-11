@@ -39,6 +39,6 @@ The provider factory and stages 5 and 6. Not report rendering or persistence.
 ## Notes
 
 - Open question: which disclosures the Compliance dimension checks (spec OQ 3).
-- Open question: score scale and rounding (spec OQ 5).
+- Decision: each dimension is scored 1–10 with a rationale; overall = round(weighted mean × 10, 1), computed by `QAScores` (user's decision, 2026-10-10, story 1.1).
 - Open question: retry, timeout, and malformed-output handling per provider (spec OQ 7).
 - Waits on epic-transcript-safety because: no LLM may see a transcript before screening and redaction.

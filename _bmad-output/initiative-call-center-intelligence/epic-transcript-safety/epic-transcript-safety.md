@@ -20,7 +20,7 @@ The pipeline is safe to hand to an LLM; the security suite proving CAP-3 and CAP
 
 ## Done when
 
-1. A transcript matching any of the 22 injection patterns stops the pipeline, and a test proves the LLM client is never invoked.
+1. A transcript matching any of the 22 injection patterns blocks the call: the remaining analysis stages are skipped, a test proves the LLM client is never invoked, and the report stage still records the call with its reason.
 2. SSN, credit card, email, and phone values seeded in a transcript are absent from the text passed on.
 3. Clean transcripts pass through unchanged apart from redactions.
 4. Both stages run inside the live graph, ahead of any LLM stage, with the security suite green.
@@ -36,6 +36,7 @@ Stages 3 and 4 only. Built and tested on fixture transcripts, so it runs in para
 
 ## Notes
 
-- Open question: what the 22 patterns are, and whether a match rejects the call or flags it (spec OQ 2).
+- Open question: what the 22 patterns are (spec OQ 2).
+- Decision: a match blocks the call rather than flagging it; the graph skips to the report stage (user's decision, 2026-10-10, story 1.1).
 - Open question: PII scope beyond the four types, and whether raw text may be stored (spec OQ 4).
 - Waits on epic-platform-baseline because: it needs the transcript segment format.

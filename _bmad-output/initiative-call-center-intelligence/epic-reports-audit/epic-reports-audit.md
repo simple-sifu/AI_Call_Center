@@ -22,7 +22,7 @@ Every analyzed call leaves a downloadable report and a provable audit trail; CAP
 
 1. After a run, a PDF and a JSON report exist for the call, and they agree with the state.
 2. The call's row is in SQLite, with whatever the Observability tab needs persisted.
-3. Each stage has an audit entry, and the application offers no path to update or delete audit entries.
+3. Each stage that ran has an audit entry (a blocked or failed call is reported too), and the application offers no path to update or delete audit entries.
 4. Stage 7 runs inside the live graph, with tests green.
 
 ## Boundaries
