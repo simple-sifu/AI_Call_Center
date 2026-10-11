@@ -3,7 +3,7 @@ title: 'Pipeline state contract'
 type: 'feature'
 ticket: '1'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: 'c8cbc2da61a91ea0b2db72594b690a1a803a9e8e'
 route: 'full'
 route_source: 'auto'
