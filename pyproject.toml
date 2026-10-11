@@ -1,0 +1,33 @@
+[project]
+name = "call-center"
+version = "0.1.0"
+description = "AI call center intelligence pipeline"
+requires-python = ">=3.11,<3.13"
+dependencies = ["langgraph"]
+
+[project.scripts]
+call-center = "call_center.cli:main"
+
+[dependency-groups]
+dev = ["pytest", "ruff"]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [".agents", ".claude", "_bmad", "_bmad-output"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = [
+    "unit: fast isolated tests",
+    "integration: tests that run the pipeline end to end",
+    "security: tests that guard security constraints",
+]
