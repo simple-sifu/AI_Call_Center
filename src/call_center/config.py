@@ -11,6 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LLMProvider = Literal["openai", "gemini", "groq"]
 WhisperModelSize = Literal["tiny", "base", "small", "medium", "large-v3"]
+AgentChannel = Literal["left", "right"]
 
 
 class Settings(BaseSettings):
@@ -27,6 +28,7 @@ class Settings(BaseSettings):
     whisper_model_size: WhisperModelSize = Field(
         "tiny", validation_alias=AliasChoices("WHISPER_MODEL_SIZE")
     )
+    agent_channel: AgentChannel = Field("left", validation_alias=AliasChoices("AGENT_CHANNEL"))
 
     openai_model: str = Field("gpt-4o", validation_alias=AliasChoices("OPENAI_MODEL"))
     gemini_model: str = Field("gemini-2.0-flash", validation_alias=AliasChoices("GEMINI_MODEL"))

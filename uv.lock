@@ -55,6 +55,8 @@ dependencies = [
     { name = "faster-whisper" },
     { name = "langchain-core" },
     { name = "langgraph" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
 ]
@@ -71,6 +73,7 @@ requires-dist = [
     { name = "faster-whisper", specifier = ">=1.2.1" },
     { name = "langchain-core", specifier = ">=1.6.9" },
     { name = "langgraph" },
+    { name = "numpy", specifier = ">=2.4.6" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
 ]
