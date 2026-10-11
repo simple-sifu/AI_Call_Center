@@ -71,7 +71,7 @@ def test_fake_segments_map_to_speaker_1_transcript(use_fake):
     assert fake.paths == [SAMPLE]
     assert result["stages_completed"] == ["transcription"]
     assert [(e.stage, e.outcome, e.detail) for e in result["audit"]] == [
-        ("transcription", "ok", "2 segments; mono: no speaker separation")
+        ("transcription", "ok", "2 segments; mono: no speaker separation; cache miss")
     ]
     assert "status" not in result
 
@@ -178,7 +178,7 @@ def test_mono_call_is_one_speaker_with_audit_note(use_fake):
     assert "status" not in result
     assert _speakers(result) == ["speaker_1", "speaker_1"]
     assert [(e.outcome, e.detail) for e in result["audit"]] == [
-        ("ok", "2 segments; mono: no speaker separation")
+        ("ok", "2 segments; mono: no speaker separation; cache miss")
     ]
     assert "mono: no speaker separation" in result["audit"][0].detail
     assert fake.paths == [CALL_MONO]
@@ -206,7 +206,7 @@ def test_stereo_call_labels_by_louder_channel(
     assert _speakers(result) == expected
     assert [s.text for s in result["transcript"].segments] == [s.text for s in TWO_TURNS]
     assert [e.detail for e in result["audit"]] == [
-        f"2 segments; stereo, agent={agent_channel or 'left'}"
+        f"2 segments; stereo, agent={agent_channel or 'left'}; cache miss"
     ]
     assert fake.paths == [path]  # one transcription pass over the mix
 
@@ -220,7 +220,9 @@ def test_dual_mono_stereo_is_one_speaker(use_fake, tmp_path):
 
     assert "status" not in result, result.get("status_reason")
     assert _speakers(result) == ["speaker_1", "speaker_1"]
-    assert [e.detail for e in result["audit"]] == ["2 segments; dual-mono: no speaker separation"]
+    assert [e.detail for e in result["audit"]] == [
+        "2 segments; dual-mono: no speaker separation; cache miss"
+    ]
     assert fake.paths == [path]
 
 
@@ -231,7 +233,9 @@ def test_more_than_two_channels_is_one_speaker(use_fake, tmp_path):
 
     assert "status" not in result, result.get("status_reason")
     assert _speakers(result) == ["speaker_1", "speaker_1"]
-    assert [e.detail for e in result["audit"]] == ["2 segments; 4 channels: no speaker separation"]
+    assert [e.detail for e in result["audit"]] == [
+        "2 segments; 4 channels: no speaker separation; cache miss"
+    ]
 
 
 def test_invalid_agent_channel_fails_with_safe_config_reason(use_fake, monkeypatch):
@@ -271,3 +275,120 @@ def test_near_identical_channels_count_as_dual_mono(use_fake, tmp_path):
     result = transcription.run(_state(path))
     assert [s.speaker for s in result["transcript"].segments] == ["speaker_1", "speaker_1"]
     assert "dual-mono: no speaker separation" in result["audit"][0].detail
+
+
+# --- Transcript cache (matrix rows 1-4 and 6-8) ---
+
+
+def _cache_note(result) -> str:
+    return result["audit"][0].detail.rsplit("; ", 1)[-1]
+
+
+def _entry(cache_dir: Path, path: Path, size: str = "tiny") -> Path:
+    return cache_dir / hashlib.sha256(path.read_bytes()).hexdigest() / f"{size}.json"
+
+
+def test_first_run_misses_and_writes_entry(use_fake, _isolated_transcript_cache):
+    fake = _Fake(TWO_TURNS)
+    use_fake(fake)
+    result = transcription.run(_state(CALL_MONO))
+
+    assert fake.paths == [CALL_MONO]
+    assert _cache_note(result) == "cache miss"
+    assert _entry(_isolated_transcript_cache, CALL_MONO).is_file()
+
+
+def test_same_audio_any_path_hits_without_transcribing(use_fake, tmp_path):
+    fake = _Fake(TWO_TURNS)
+    use_fake(fake)
+    first = transcription.run(_state(CALL_MONO))
+    copy = tmp_path / "renamed copy.wav"
+    copy.write_bytes(CALL_MONO.read_bytes())
+    second = transcription.run(_state(copy))
+
+    assert fake.paths == [CALL_MONO]  # never called for the second run
+    assert second["transcript"] == first["transcript"]
+    assert _cache_note(second) == "cache hit"
+    assert "status" not in second
+
+
+def test_other_model_size_misses(use_fake, monkeypatch):
+    fake = _Fake(TWO_TURNS)
+    sizes = use_fake(fake)
+    transcription.run(_state(CALL_MONO))
+    monkeypatch.setenv("WHISPER_MODEL_SIZE", "base")
+    result = transcription.run(_state(CALL_MONO))
+
+    assert sizes == ["tiny", "base"]
+    assert fake.paths == [CALL_MONO, CALL_MONO]
+    assert _cache_note(result) == "cache miss"
+
+
+def test_hit_relabels_with_current_agent_channel(use_fake, monkeypatch, tmp_path):
+    path = _write_wav(tmp_path / "stereo.wav", _two_turn_channels())
+    fake = _Fake(TWO_TURNS)
+    use_fake(fake)
+    first = transcription.run(_state(path))
+    monkeypatch.setenv("AGENT_CHANNEL", "right")
+    second = transcription.run(_state(path))
+
+    assert fake.paths == [path]
+    assert _speakers(first) == ["agent", "customer"]
+    assert _speakers(second) == ["customer", "agent"]
+    assert second["audit"][0].detail == "2 segments; stereo, agent=right; cache hit"
+
+
+def test_corrupt_entry_is_a_miss_and_rewritten(use_fake, _isolated_transcript_cache):
+    entry = _entry(_isolated_transcript_cache, CALL_MONO)
+    entry.parent.mkdir(parents=True)
+    entry.write_text("{not json")
+    fake = _Fake(TWO_TURNS)
+    use_fake(fake)
+    result = transcription.run(_state(CALL_MONO))
+
+    assert fake.paths == [CALL_MONO]
+    assert _cache_note(result) == "cache miss"
+    assert '"version"' in entry.read_text()
+
+
+def test_cache_off_never_reads_or_writes(use_fake, monkeypatch, _isolated_transcript_cache):
+    monkeypatch.setenv("TRANSCRIPT_CACHE", "off")
+    fake = _Fake(TWO_TURNS)
+    use_fake(fake)
+    results = [transcription.run(_state(CALL_MONO)) for _ in range(2)]
+
+    assert fake.paths == [CALL_MONO, CALL_MONO]
+    assert [_cache_note(r) for r in results] == ["cache off", "cache off"]
+    assert not _isolated_transcript_cache.exists()
+
+
+def test_entry_is_owner_only(use_fake, _isolated_transcript_cache):
+    use_fake(_Fake(TWO_TURNS))
+    transcription.run(_state(CALL_MONO))
+    entry = _entry(_isolated_transcript_cache, CALL_MONO)
+
+    assert entry.stat().st_mode & 0o777 == 0o600
+    assert entry.parent.stat().st_mode & 0o777 == 0o700
+    assert _isolated_transcript_cache.stat().st_mode & 0o777 == 0o700
+
+
+def test_unwritable_cache_dir_still_succeeds(use_fake, monkeypatch, tmp_path):
+    blocker = tmp_path / "not-a-dir"
+    blocker.write_text("")  # a file where the cache directory should be
+    monkeypatch.setenv("TRANSCRIPT_CACHE_DIR", str(blocker / "cache"))
+    use_fake(_Fake(TWO_TURNS))
+    result = transcription.run(_state(CALL_MONO))
+
+    assert "status" not in result
+    assert len(result["transcript"].segments) == 2
+    assert result["audit"][0].detail.endswith("cache miss; cache write failed")
+
+
+def test_invalid_cache_mode_fails_with_safe_config_reason(use_fake, monkeypatch):
+    monkeypatch.setenv("TRANSCRIPT_CACHE", "maybe")
+    use_fake(_Fake(TWO_TURNS))
+    result = transcription.run(_state(CALL_MONO))
+
+    assert result["status"] == "failed"
+    assert "TRANSCRIPT_CACHE" in result["status_reason"]
+    assert "maybe" not in result["status_reason"]

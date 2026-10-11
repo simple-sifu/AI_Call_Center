@@ -22,7 +22,7 @@ Pain plus mandate. A mid-size call center takes ~5,000 calls/day; QA staff manua
   - **success:** A non-audio file renamed to `.wav`/`.mp3` is rejected; a file over 50 MB or over 60 minutes is rejected; a valid file within limits is accepted.
 - **CAP-2** Transcription
   - **intent:** The system produces a speaker-labeled transcript of each call, and returns a stored result for audio it has already transcribed.
-  - **success:** On stereo audio, each segment is labeled `agent` or `customer` by its channel (the mapping is configurable), including under crosstalk; mono audio gets a single label with an audit note. Resubmitting byte-identical audio returns the cached transcript (SHA-256 match) without running transcription again.
+  - **success:** On stereo audio, each segment is labeled `agent` or `customer` by its channel (the mapping is configurable), including under crosstalk; mono audio gets a single label with an audit note. Resubmitting byte-identical audio returns the cached transcript (SHA-256 match) without running transcription again; the cache is local and owner-only, and `TRANSCRIPT_CACHE=off` disables it.
 - **CAP-3** Injection detection
   - **intent:** The system blocks adversarial content in a transcript before any LLM sees it.
   - **success:** A transcript matching any of the 22 injection patterns blocks the call: the remaining analysis stages are skipped and a test proves the LLM client is never invoked. The report stage still records the call with the block reason and its audit trail.
@@ -87,6 +87,6 @@ Pain plus mandate. A mid-size call center takes ~5,000 calls/day; QA staff manua
 
 - What are the 22 injection patterns? (A match blocks the call; decided.)
 - Compliance dimension: which required disclosures are checked, and for which industry?
-- PII scope beyond SSN, card, email, and phone (names, addresses, date of birth, account numbers, PHI)? Are raw audio and unredacted transcripts stored in the cache or the database?
+- PII scope beyond SSN, card, email, and phone (names, addresses, date of birth, account numbers, PHI)? May unredacted transcripts be stored in the database (Epic 5)? (The local transcript cache may hold them: decided.)
 - Observability dashboard: which metrics (stage latency, tokens/cost, provider, error rate, score distribution)?
 - How should LLM retries, timeouts, and malformed output be handled per provider?

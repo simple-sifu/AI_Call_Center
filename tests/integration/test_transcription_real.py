@@ -43,7 +43,7 @@ def test_real_tiny_model_transcribes_call(monkeypatch):
     assert "thank" in text
     assert "calling" in text
     assert [s.speaker for s in segments] == TURNS
-    assert result["audit"][0].detail == f"{len(segments)} segments; stereo, agent=left"
+    assert result["audit"][0].detail == f"{len(segments)} segments; stereo, agent=left; cache miss"
     starts = [s.start for s in segments]
     assert starts == sorted(starts)
     assert all(s.end >= s.start for s in segments)

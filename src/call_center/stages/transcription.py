@@ -3,6 +3,11 @@
 The mix is transcribed once. For stereo audio each segment is then labelled ``agent`` or
 ``customer`` by the louder channel in its window; any other channel count is labelled
 ``speaker_1`` throughout, and the audit detail says no separation was possible.
+
+Raw ASR segments are cached by audio SHA-256 and model size (``transcript_cache``), so
+identical audio skips the model. Labelling always re-runs, so a changed
+``AGENT_CHANNEL`` never yields stale labels. The audit detail ends with
+``cache hit``, ``cache miss`` or ``cache off``.
 """
 
 import hashlib
@@ -10,8 +15,8 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from call_center import asr, speakers
-from call_center.config import format_config_error, load_settings
+from call_center import asr, speakers, transcript_cache
+from call_center.config import Settings, format_config_error, load_settings
 from call_center.models import AuditEvent, Transcript, TranscriptSegment
 from call_center.state import PipelineState
 
@@ -43,6 +48,21 @@ def _failed(reason: str) -> dict:
     }
 
 
+def _raw_segments(path: Path, digest: str, settings: Settings) -> tuple[list[asr.RawSegment], str]:
+    """Raw segments from the cache or the transcriber, and the cache note for the audit."""
+    size = settings.whisper_model_size
+    if settings.transcript_cache == "off":
+        return list(asr.get_transcriber(size).transcribe(path)), "cache off"
+    cache_dir = settings.transcript_cache_dir
+    cached = transcript_cache.load(cache_dir, digest, size)
+    if cached is not None:
+        return cached, "cache hit"
+    raw_segments = list(asr.get_transcriber(size).transcribe(path))
+    if not transcript_cache.store(cache_dir, digest, size, raw_segments):
+        return raw_segments, "cache miss; cache write failed"
+    return raw_segments, "cache miss"
+
+
 def run(state: PipelineState) -> dict:
     path = Path(state["source_file"])
     try:
@@ -52,8 +72,7 @@ def run(state: PipelineState) -> dict:
     try:
         with path.open("rb") as audio:
             digest = hashlib.file_digest(audio, "sha256").hexdigest()
-        transcriber = asr.get_transcriber(settings.whisper_model_size)
-        raw_segments = list(transcriber.transcribe(path))
+        raw_segments, cache_note = _raw_segments(path, digest, settings)
         channels, rate, channel_count = asr.load_channels(path)
         labels = speakers.label_segments(raw_segments, channels, rate, settings.agent_channel)
         segments = tuple(
@@ -63,7 +82,7 @@ def run(state: PipelineState) -> dict:
     except Exception as error:  # any failure halts the run; none escapes the graph
         return _failed(f"transcription failed: {type(error).__name__}: {error}")
     separation = _separation(channel_count, bool(channels), settings.agent_channel)
-    detail = f"{len(segments)} segments; {separation}"
+    detail = f"{len(segments)} segments; {separation}; {cache_note}"
     return {
         "stages_completed": [NAME],
         "transcript": transcript,
