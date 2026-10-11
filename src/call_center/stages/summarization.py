@@ -7,11 +7,11 @@ NAME = "summarization"
 
 _PLACEHOLDER = Summary(
     call_purpose="placeholder",
-    action_items=[],
+    action_items=(),
     sentiment_trajectory=SentimentTrajectory(
         opening="neutral", middle="neutral", closing="neutral"
     ),
-    entities=[],
+    entities=(),
 )
 
 

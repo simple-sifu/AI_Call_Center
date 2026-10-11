@@ -1,5 +1,7 @@
 """LangGraph wiring for the pipeline. The stage order lives only in STAGES."""
 
+from itertools import pairwise
+
 from langgraph.graph import END, START, StateGraph
 
 from call_center.stages import (
@@ -11,7 +13,7 @@ from call_center.stages import (
     summarization,
     transcription,
 )
-from call_center.state import PipelineState
+from call_center.state import PipelineState, initial_state
 
 STAGES = [
     intake,
@@ -41,7 +43,7 @@ def build_graph():
         graph.add_node(stage.NAME, stage.run)
     report_name = STAGES[-1].NAME
     graph.add_edge(START, STAGES[0].NAME)
-    for a, b in zip(STAGES, STAGES[1:], strict=False):
+    for a, b in pairwise(STAGES):
         if b.NAME == report_name:
             graph.add_edge(a.NAME, b.NAME)
         else:
@@ -51,16 +53,4 @@ def build_graph():
 
 
 def run_pipeline(path: str) -> dict:
-    return build_graph().invoke(
-        {
-            "source_file": str(path),
-            "stages_completed": [],
-            "transcript": None,
-            "redacted_transcript": None,
-            "summary": None,
-            "qa_scores": None,
-            "audit": [],
-            "status": "running",
-            "status_reason": None,
-        }
-    )
+    return build_graph().invoke(initial_state(path))

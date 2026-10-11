@@ -6,9 +6,7 @@ from call_center.state import PipelineState
 NAME = "transcription"
 
 _PLACEHOLDER = Transcript(
-    segments=[
-        TranscriptSegment(speaker="agent", start=0.0, end=1.0, text="placeholder"),
-    ],
+    segments=(TranscriptSegment(speaker="agent", start=0.0, end=1.0, text="placeholder"),),
     audio_sha256="0" * 64,
 )
 
