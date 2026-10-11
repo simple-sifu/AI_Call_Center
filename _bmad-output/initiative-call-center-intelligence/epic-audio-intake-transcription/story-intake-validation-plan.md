@@ -3,7 +3,7 @@ title: 'Intake validation'
 type: 'feature'
 ticket: '5'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: '0b55a84d9c8bdb624f3e3aba7b375f7ae8fad569'
 route: 'full'
 route_source: 'auto'
