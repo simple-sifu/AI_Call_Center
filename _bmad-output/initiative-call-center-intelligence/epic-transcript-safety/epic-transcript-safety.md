@@ -18,6 +18,13 @@ Real stages 3 and 4: block adversarial transcripts with the injection patterns, 
 
 The pipeline is safe to hand to an LLM; the security suite proving CAP-3 and CAP-4 is the signal.
 
+## Requirements
+
+- CAP-3 (R1): A catalogue of 22 injection patterns detects adversarial transcript text; a match blocks the call with a reason naming the pattern ids and categories, never quoting the transcript. (spec CAP-3)
+- CAP-3 (R2): A blocked call never reaches PII redaction or any LLM stage. (spec CAP-3, Constraints)
+- CAP-4 (R3): SSN, credit card (Luhn-checked), email, and phone values, written as digits or as spoken number words, are replaced by typed placeholders in the text passed on; clean text is unchanged. (spec CAP-4)
+- R4: The security suite proves the stage order, R2, and R3 end to end. (spec Constraints)
+
 ## Done when
 
 1. A transcript matching any of the 22 injection patterns blocks the call: the remaining analysis stages are skipped, a test proves the LLM client is never invoked, and the report stage still records the call with its reason.
@@ -36,7 +43,12 @@ Stages 3 and 4 only. Built and tested on fixture transcripts, so it runs in para
 
 ## Notes
 
-- Open question: what the 22 patterns are (spec OQ 2).
+- Open question: what the 22 patterns are (spec OQ 2); story 3.2 drafts them for the user's approval.
+- Decision: the 22 patterns are drafted in story 3.2 across instruction override, role reassignment, system-prompt extraction, score manipulation, and jailbreak framing, and the user approves the catalogue (user's decision, 2026-10-11).
+- Decision: PII scope is the spec's four types, plus spoken-number normalization (story 3.4); dates of birth, account numbers, names, and addresses are out of scope for this epic (user's decision, 2026-10-11).
+- Decision: redactions use typed placeholders `[SSN]`, `[CARD]`, `[EMAIL]`, `[PHONE]`; the audit records counts by type, never values (user's decision, 2026-10-11).
+- Decision: a block reason names pattern ids and categories and never quotes transcript text (user's decision, 2026-10-11).
+- Decision: Refactor sweep closes the epic (approved with the breakdown, 2026-10-11).
 - Decision: a match blocks the call rather than flagging it; the graph skips to the report stage (user's decision, 2026-10-10, story 1.1).
-- Open question: PII scope beyond the four types, and whether raw text may be stored (spec OQ 4).
+- Open question: whether unredacted text may be stored in the database (spec OQ 4) belongs to Epic 5; the local transcript cache was decided in story 2.4.
 - Waits on epic-platform-baseline because: it needs the transcript segment format.

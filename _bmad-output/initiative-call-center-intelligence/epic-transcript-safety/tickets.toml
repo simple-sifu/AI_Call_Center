@@ -1,0 +1,67 @@
+# Epic 3 breakdown, in build order. Table order is build order; ids are permanent names.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Tracer: injection detection"
+description = "Replaces the injection stub with a pattern catalogue module (id, category, regex, example) and text normalization (case, whitespace, punctuation) matched across joined segments, starting with about 5 core patterns; a match sets status blocked with a reason naming pattern ids and categories, never transcript text."
+verify = "A transcript saying 'ignore all previous instructions' is blocked with its pattern id and the run skips to report; benign call phrases such as 'ignore that, my previous order' pass."
+covers = ["R1", "R2"]
+after = ["1.1"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Full 22-pattern injection catalogue"
+description = "Completes the catalogue to 22 patterns across instruction override, role reassignment, system-prompt extraction, score manipulation, and jailbreak framing, each with a matching and a non-matching example, for the user to approve."
+verify = "Every pattern has passing match and no-match tests over normalized text, and the user approves the catalogue."
+covers = ["R1"]
+after = [1]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "PII redaction"
+description = "Replaces the redaction stub: regexes for SSN, credit card (Luhn-checked), email, and phone replace each value with [SSN], [CARD], [EMAIL], or [PHONE] per segment, keeping speaker and timing; the audit records counts by type, never values."
+verify = "Seeded transcripts lose every PII value and keep all other text; a 16-digit number failing Luhn is left alone; the audit shows counts only."
+covers = ["R3"]
+after = ["1.1"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Spoken-number PII"
+description = "Normalizes spoken number words ('four one one one', 'oh', 'double five') to digits before PII detection, so numbers read aloud are redacted too."
+verify = "A transcript with a card number, an SSN, and a phone number read out in words is fully redacted, and ordinary number words in context ('one moment', 'two options') are kept."
+covers = ["R3"]
+after = [3]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 5
+type = "story"
+title = "End-to-end security suite"
+description = "Adds say-generated calls (an injection attempt, and a caller reading out a card number) and slow tests running them through the real pipeline, plus a guard that no LLM stage ever receives unredacted text."
+verify = "The injection call ends blocked before PII redaction; the card call's redacted transcript contains no digits of the card; both pass under `uv run pytest -m slow`."
+covers = ["R2", "R3", "R4"]
+after = [2, 4]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup only across the epic, scoped when it starts from the plans and deferred review findings."
+verify = "pytest and ruff pass with no behavior change."
+covers = []
+after = [1, 2, 3, 4, 5]
+hitl = false
+risk = "low"
