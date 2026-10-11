@@ -3,7 +3,7 @@ title: 'Speaker labeling: pyannote vs. split by channel'
 type: 'chore'
 ticket: '2'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: '443c93cda8b695f0598d13d3516a84fe1bdf8014'
 route: 'oneshot'
 route_source: 'auto'
