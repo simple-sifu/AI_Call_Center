@@ -18,6 +18,7 @@
 
 - **Intake:** detect the format from magic bytes, not the extension; reject files over 50 MB or 60 minutes.
 - **Transcription:** cache key is the SHA-256 of the audio bytes.
+- **Speaker labeling:** transcribe the mix once, then label each segment by its louder channel in that time window (`agent` = left, `customer` = right, configurable). Mono gets one label. No pyannote/PyTorch.
 - **Injection detection:** 22 regex patterns.
 - **PII redaction:** SSN, credit card, email, and phone.
 - **QA scoring:** the LLM returns dimension scores; Python recomputes the overall and discards any LLM overall.
