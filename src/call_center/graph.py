@@ -24,16 +24,43 @@ STAGES = [
 ]
 
 
+# Statuses that stop the run: remaining stages are skipped and the report stage records it.
+HALTED = ("blocked", "failed")
+
+
+def _router(next_name: str, report_name: str):
+    def route(state: PipelineState) -> str:
+        return report_name if state.get("status") in HALTED else next_name
+
+    return route
+
+
 def build_graph():
     graph = StateGraph(PipelineState)
     for stage in STAGES:
         graph.add_node(stage.NAME, stage.run)
+    report_name = STAGES[-1].NAME
     graph.add_edge(START, STAGES[0].NAME)
     for a, b in zip(STAGES, STAGES[1:], strict=False):
-        graph.add_edge(a.NAME, b.NAME)
-    graph.add_edge(STAGES[-1].NAME, END)
+        if b.NAME == report_name:
+            graph.add_edge(a.NAME, b.NAME)
+        else:
+            graph.add_conditional_edges(a.NAME, _router(b.NAME, report_name), [b.NAME, report_name])
+    graph.add_edge(report_name, END)
     return graph.compile()
 
 
 def run_pipeline(path: str) -> dict:
-    return build_graph().invoke({"source_file": str(path), "stages_completed": []})
+    return build_graph().invoke(
+        {
+            "source_file": str(path),
+            "stages_completed": [],
+            "transcript": None,
+            "redacted_transcript": None,
+            "summary": None,
+            "qa_scores": None,
+            "audit": [],
+            "status": "running",
+            "status_reason": None,
+        }
+    )
