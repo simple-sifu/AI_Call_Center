@@ -3,7 +3,7 @@ title: 'CI'
 type: 'chore'
 ticket: '4'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '987f8826cf9e82962f12d8e94dd3ca4157fc9267'
 route: 'oneshot'
 route_source: 'auto'
