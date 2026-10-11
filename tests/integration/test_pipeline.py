@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from call_center.cli import main
 from call_center.graph import run_pipeline
 from call_center.models import AuditEvent, QAScores, Summary, Transcript
@@ -74,3 +76,24 @@ def test_cli_path_is_directory(tmp_path, monkeypatch, capsys):
     assert main(["analyze", "tests/"]) == 2
     assert capsys.readouterr().err.strip() == "not a file: tests"
     assert [p.name for p in tmp_path.iterdir()] == ["tests"]
+
+
+@pytest.mark.parametrize(
+    ("var", "value", "allowed"),
+    [
+        ("LLM_PROVIDER", "claude", ["openai", "gemini", "groq"]),
+        ("WHISPER_MODEL_SIZE", "huge", ["tiny", "base", "small", "medium", "large-v3"]),
+    ],
+)
+def test_cli_invalid_config_exits_2(tmp_path, monkeypatch, capsys, var, value, allowed):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(var, value)
+    assert main(["analyze", str(SAMPLE)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.startswith("invalid configuration:")
+    assert var in captured.err
+    for name in allowed:
+        assert name in captured.err
+    assert value not in captured.err
+    assert list(tmp_path.iterdir()) == []

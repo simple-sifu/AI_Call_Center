@@ -6,6 +6,7 @@ requires-python = ">=3.11,<3.13"
 dependencies = [
     "langgraph",
     "pydantic>=2",
+    "pydantic-settings>=2.15.0",
 ]
 
 [project.scripts]
