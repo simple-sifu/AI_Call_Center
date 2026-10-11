@@ -16,3 +16,9 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
+
+# BMad render cache
+_bmad/render/
+
+# Pipeline output
+reports/
