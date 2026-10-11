@@ -38,6 +38,7 @@ Oneshot: about 40 lines of code and 50 of tests across `config.py`, `cli.py`, an
 - Tests: 5 unit tests in `tests/unit/test_tracing.py`, plus a CLI test asserting a run with no key succeeds with both tracing flags `false`. 55 tests pass; ruff is clean.
 - The user's `.env` has the tracing flag, a key, and a project set (checked as booleans only), so a real CLI run sends a trace. That is the hitl check, left to the user.
 - Review patch: langsmith reads four flag names, in precedence order `LANGSMITH_TRACING_V2`, `LANGCHAIN_TRACING_V2`, `LANGSMITH_TRACING`, `LANGCHAIN_TRACING`. The settings alias now lists all four in that order, `TRACING_FLAGS` is derived from it, and both branches write all four. Tests now assert `langsmith.utils.tracing_is_enabled()` (clearing its `lru_cache`) instead of only the strings written. `ENV_VARS` picks up the new names, so the conftest fixture isolates them. 61 tests pass.
+- hitl check met (user, 2026-10-10): a real CLI run with the user's key appeared as a trace in LangSmith.
 
 ## Review Triage Log
 
