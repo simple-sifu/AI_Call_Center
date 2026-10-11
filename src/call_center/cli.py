@@ -52,6 +52,12 @@ def main(argv: list[str] | None = None) -> int:
     out_path = out_dir / f"{source.stem}.json"
     out_path.write_text(json.dumps(report, indent=2) + "\n")
     print(out_path)
+    if state["status"] == "failed":
+        print(state["status_reason"] or "failed", file=sys.stderr)
+        return 2
+    if state["status"] == "blocked":
+        print(f"blocked: {state['status_reason'] or 'no reason given'}", file=sys.stderr)
+        return 2
     return 0
 
 
