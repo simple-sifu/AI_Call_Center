@@ -1,0 +1,68 @@
+# Epic 2 breakdown, in build order. Table order is build order; ids are permanent names.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Tracer: real transcription"
+description = "Replaces the transcription stub with faster-whisper behind a Transcriber interface, using WHISPER_MODEL_SIZE from settings and one speaker label for every segment; adds say-generated fixtures (two-voice stereo call and a mono version); tests use a fake transcriber, and one real-model test is marked slow and skipped by default."
+verify = "`uv run pytest -m slow` transcribes the stereo fixture with the tiny model and the expected words appear; the default `uv run pytest` and CI never download a model."
+covers = ["R3", "R5"]
+after = ["1.1"]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "spike"
+title = "Speaker labeling: pyannote vs. split by channel"
+description = "Compares pyannote.audio and channel-based labeling on the fixtures for accuracy, install size, CPU time, and setup cost (Hugging Face token), and ends with a recommendation for the user to decide."
+verify = "A findings note in the spike file, and the user's choice recorded as a Decision line in the epic's Notes."
+covers = ["R3"]
+after = [1]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Speaker labeling"
+description = "Labels each transcript segment with its speaker using the approach chosen in spike 2.2."
+verify = "The stereo fixture's two voices come out as two distinct speakers, with each segment assigned to the right one."
+covers = ["R3"]
+after = [2]
+hitl = false
+risk = "medium"
+unknown = "Which speaker-labeling approach spike 2.2 selects; remove once the user's decision is recorded."
+
+[[entry]]
+id = 4
+type = "story"
+title = "Transcript cache"
+description = "Returns the stored transcript for byte-identical audio from .cache/transcripts/, keyed by audio SHA-256 plus model size, without running whisper; .cache/ is git-ignored."
+verify = "A test counting transcriber calls shows the second run of the same audio makes none, and a different model size misses the cache."
+covers = ["R4"]
+after = [3]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Intake validation"
+description = "Replaces the intake stub: detects WAV, MP3, FLAC, OGG, and M4A by magic bytes and enforces the 50 MB and 60-minute limits (duration via PyAV); a rejection sets status failed with a reason so the graph skips to the report, and the CLI prints `rejected: <reason>` and exits 2."
+verify = "Tests reject a renamed non-audio file, a file over 50 MB, and one over 60 minutes with clear reasons, and accept a valid file in each format."
+covers = ["R1", "R2"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup only across the epic, scoped when it starts from the plans and deferred review findings."
+verify = "pytest and ruff pass with no behavior change."
+covers = []
+after = [1, 2, 3, 4, 5]
+hitl = false
+risk = "low"

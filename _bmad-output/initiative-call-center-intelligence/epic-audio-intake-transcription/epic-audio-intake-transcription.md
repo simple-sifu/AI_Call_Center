@@ -18,6 +18,14 @@ Real stages 1 and 2: validate uploaded audio by content and limits, then produce
 
 Any valid call recording becomes a diarized transcript in state; CAP-1 and CAP-2 success criteria are the signal.
 
+## Requirements
+
+- CAP-1 (R1): Accept audio by content (magic bytes), not extension; formats WAV, MP3, FLAC, OGG, M4A. (spec CAP-1)
+- CAP-1 (R2): Reject files over 50 MB or over 60 minutes. (spec CAP-1)
+- CAP-2 (R3): A speaker-labeled transcript in the state contract's `Transcript` format. (spec CAP-2)
+- CAP-2 (R4): Byte-identical audio returns the cached transcript without re-running whisper. (spec CAP-2)
+- R5: Runs on CPU; model size from `WHISPER_MODEL_SIZE`; no model download in CI. (spec Constraints)
+
 ## Done when
 
 1. A non-audio file renamed to an audio extension, a file over 50 MB, and a file over 60 minutes are each rejected with a clear reason.
@@ -38,6 +46,10 @@ Stages 1 and 2 only. Not screening, redaction, or any LLM call.
 
 ## Notes
 
-- Open question: diarization tool (spec OQ 1); faster-whisper has none built in.
-- Assumption: open with a spike comparing pyannote against a heuristic (unconfirmed).
+- Decision: speaker labeling is decided by spike 2.2 (pyannote vs. split by channel) before story 2.3 starts (user's decision, 2026-10-11).
+- Decision: a rejected file sets status `failed` with a reason; the report and audit trail are still written; the CLI prints `rejected: <reason>` and exits 2 (approved with the breakdown, 2026-10-11).
+- Decision: the transcript cache is file-based under `.cache/transcripts/`, keyed by audio SHA-256 plus model size; SQLite stays with Epic 5 (approved with the breakdown, 2026-10-11).
+- Decision: accepted formats are WAV, MP3, FLAC, OGG, M4A (approved with the breakdown, 2026-10-11).
+- Decision: fixtures are generated with macOS `say` (two-voice stereo plus mono) and committed, so CI needs no real recording (approved with the breakdown, 2026-10-11).
+- Decision: Refactor sweep closes the epic (approved with the breakdown, 2026-10-11).
 - Waits on epic-platform-baseline because: it needs the state contract and the stage slots.
