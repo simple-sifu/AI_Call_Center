@@ -32,7 +32,7 @@ A QA reviewer gets a consistent, auditable analysis of any call by uploading it;
 Split by spec capability; one repo, one owner. Not live calls, telephony, auth, a human-review workflow, or throughput targets; see the spec's non-goals. Tracer path: Epic 1's stub graph runs a sample file end to end; each later epic replaces its own stub stage.
 
 - Touch point: OpenAI, Gemini, Groq APIs — consumed via the provider factory; owner: epic-llm-analysis
-- Touch point: faster-whisper model weights (and the diarization tool, if one is chosen) — downloaded and configured; owner: epic-audio-intake-transcription
+- Touch point: faster-whisper model weights — downloaded and configured; owner: epic-audio-intake-transcription
 - Touch point: LangSmith — tracing configured by env var; owner: epic-platform-baseline
 
 ## References

@@ -1,6 +1,8 @@
 """Guard: a blocked run never reaches PII redaction or the LLM stages, and LLM stages
 read only the redacted transcript."""
 
+import wave
+
 import pytest
 
 from call_center.graph import run_pipeline
@@ -18,8 +20,14 @@ def test_blocked_at_injection_skips_to_report(monkeypatch, tmp_path):
         }
 
     monkeypatch.setattr(injection_detection, "run", blocked)
+    # Transcription reads the file's audio stream for speaker labelling, so it must be a
+    # real (silent) WAV; the fake ASR ignores the content.
     call = tmp_path / "call.wav"
-    call.write_bytes(b"")  # transcription now reads the file; the fake ASR ignores content
+    with wave.open(str(call), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16_000)
+        wav.writeframes(b"\0\0" * 1_600)
     state = run_pipeline(str(call))
 
     assert state["stages_completed"] == [

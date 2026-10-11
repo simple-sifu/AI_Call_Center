@@ -9,6 +9,7 @@ dependencies = [
     "faster-whisper>=1.2.1",
     "langchain-core>=1.6.9",
     "langgraph",
+    "numpy>=2.4.6",
     "pydantic>=2",
     "pydantic-settings>=2.15.0",
 ]
