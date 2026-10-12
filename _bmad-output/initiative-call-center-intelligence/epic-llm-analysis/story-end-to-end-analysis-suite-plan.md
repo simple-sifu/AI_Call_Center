@@ -3,7 +3,7 @@ title: 'End-to-end analysis suite'
 type: 'feature'
 ticket: '6'
 created: '2026-10-12'
-status: built
+status: done
 baseline_revision: 'd4ff759'
 route: 'full'
 route_source: 'auto'
