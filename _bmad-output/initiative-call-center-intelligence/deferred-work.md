@@ -20,3 +20,6 @@
   summary: `test_card_call_reaches_llm_stages_redacted` (slow) failed once in seven full slow runs during the story 3.7 review and was not reproduced.
   evidence: Unverified (maybe-false; medium if real). Settle it by running `HF_HUB_OFFLINE=1 uv run pytest -m slow` repeatedly and capturing the failing transcript; the tiny model may transcribe the committed `call_card.wav` nondeterministically.
 - resolved: the two unredacted ASR card forms entry above (story 5) is resolved by story 3.7 (`epic-transcript-safety/story-asr-digit-formats-plan.md`): "4.539, 1.488, 0.343, 6.467." and "4 5 3 9, 1 4 8 8, 0 3 4 3, 6 4 6 7." both redact to `[CARD]`.
+- source_plan: `_bmad-output/initiative-call-center-intelligence/epic-llm-analysis/story-retry-and-failure-policy-plan.md`
+  summary: Likely cause of the flaky `test_card_call_reaches_llm_stages_redacted` entry above: it runs `card_digit_leaks` over `model_dump_json()` of every audit event, which includes the `at` timestamps with microseconds, so a timestamp can by chance contain a 4-digit group of the test card.
+  evidence: `tests/security/test_end_to_end.py` lines 67-68; reproduced once during story 4.3 (three reruns passed). Fix candidate: check only the audit `detail` strings (and outcomes), not the serialized timestamps.
