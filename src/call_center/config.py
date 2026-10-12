@@ -38,6 +38,10 @@ class Settings(BaseSettings):
         Path(".cache/transcripts"), validation_alias=AliasChoices("TRANSCRIPT_CACHE_DIR")
     )
 
+    report_output_dir: Path = Field(
+        Path("reports"), validation_alias=AliasChoices("REPORT_OUTPUT_DIR")
+    )
+
     openai_model: str = Field("gpt-4o", validation_alias=AliasChoices("OPENAI_MODEL"))
     gemini_model: str = Field("gemini-2.0-flash", validation_alias=AliasChoices("GEMINI_MODEL"))
     groq_model: str = Field("llama-3.3-70b-versatile", validation_alias=AliasChoices("GROQ_MODEL"))

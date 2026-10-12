@@ -1,7 +1,6 @@
 """Command-line entry point: ``call-center analyze <file> [--out DIR]``."""
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -38,20 +37,17 @@ def main(argv: list[str] | None = None) -> int:
 
     tracing = configure_tracing(settings)
     try:
-        state = run_pipeline(str(source))
+        state = run_pipeline(str(source), report_output_dir=args.out)
     finally:
         if tracing:
             flush_traces()
-    report = {
-        "source_file": state["source_file"],
-        "status": "stub",
-        "stages_completed": state["stages_completed"],
-    }
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{source.stem}.json"
-    out_path.write_text(json.dumps(report, indent=2) + "\n")
-    print(out_path)
+
+    report_path = state.get("report_json_path")
+    if not report_path:
+        print("report stage did not write a JSON file", file=sys.stderr)
+        return 2
+    print(report_path)
+
     if state["status"] == "failed":
         print(state["status_reason"] or "failed", file=sys.stderr)
         return 2

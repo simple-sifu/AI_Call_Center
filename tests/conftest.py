@@ -64,6 +64,21 @@ def _isolated_transcript_cache(
     return cache_dir
 
 
+@pytest.fixture(autouse=True)
+def _isolated_report_output(
+    request: pytest.FixtureRequest,
+    _isolated_config: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Path:
+    """Default report writes under ``tmp_path`` unless a test overrides ``--out`` or state."""
+    if request.node.get_closest_marker("live"):
+        return tmp_path / "reports"
+    out = tmp_path / "reports"
+    monkeypatch.setenv("REPORT_OUTPUT_DIR", str(out))
+    return out
+
+
 class _SilentTranscriber:
     """Fake ASR that hears no speech; tests needing segments patch their own."""
 

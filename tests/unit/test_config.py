@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -19,6 +21,11 @@ def test_defaults():
     assert s.langsmith_api_key is None
     assert s.langsmith_project is None
     assert s.langsmith_tracing is False
+
+
+def test_report_output_dir_default(monkeypatch):
+    monkeypatch.delenv("REPORT_OUTPUT_DIR", raising=False)
+    assert Settings(_env_file=None).report_output_dir == Path("reports")
 
 
 def test_env_override(monkeypatch):
