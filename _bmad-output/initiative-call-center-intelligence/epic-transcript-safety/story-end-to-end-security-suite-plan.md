@@ -3,7 +3,7 @@ title: 'End-to-end security suite'
 type: 'feature'
 ticket: '5'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: '3394bfe52c338028b173b5212962bbc33007b705'
 route: 'full'
 route_source: 'auto'
