@@ -24,9 +24,10 @@ class _Fake:
         return self.segments
 
 
-def test_seeded_values_never_reach_redacted_transcript_or_audit(monkeypatch):
+def test_seeded_values_never_reach_redacted_transcript_or_audit(monkeypatch, llm_guard):
     monkeypatch.setattr(asr, "get_transcriber", lambda model_size: _Fake(SEEDED.values()))
     state = run_pipeline(str(CALL_MONO))
+    llm_guard.assert_redacted_only("4111111111111111")
 
     assert state["status"] == "completed", state["status_reason"]
     redacted = state["redacted_transcript"].model_dump_json()
@@ -59,9 +60,10 @@ DIGIT_WORDS = {
 }
 
 
-def test_spoken_values_never_reach_redacted_transcript(monkeypatch):
+def test_spoken_values_never_reach_redacted_transcript(monkeypatch, llm_guard):
     monkeypatch.setattr(asr, "get_transcriber", lambda model_size: _Fake(SPOKEN))
     state = run_pipeline(str(CALL_MONO))
+    llm_guard.assert_redacted_only("4111111111111111")
 
     assert state["status"] == "completed", state["status_reason"]
     texts = [s.text for s in state["redacted_transcript"].segments]
@@ -79,9 +81,10 @@ def test_spoken_values_never_reach_redacted_transcript(monkeypatch):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("name", ["call_stereo.wav", "call_mono.wav"])
-def test_real_fixture_calls_redact_to_same_text(monkeypatch, name):
+def test_real_fixture_calls_redact_to_same_text(monkeypatch, llm_guard, name):
     monkeypatch.setenv("WHISPER_MODEL_SIZE", "tiny")
     state = run_pipeline(str(FIXTURES / name))
+    llm_guard.assert_redacted_only()
 
     assert state["status"] == "completed", state["status_reason"]
     assert state["transcript"].segments

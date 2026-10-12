@@ -13,3 +13,6 @@
 - source_plan: `_bmad-output/initiative-call-center-intelligence/epic-transcript-safety/story-spoken-number-pii-plan.md`
   summary: A date written with a month name ("January 15, 2024") next to spoken digits joins the spoken run and is over-redacted ("January 15, 2024, one two three" → "January [SSN]").
   evidence: Reproduced on the story 3.4 build; "15" and "2024" are plain digit groups under the frozen run rule, so a month-name date rule would be a rule change.
+- source_plan: `_bmad-output/initiative-call-center-intelligence/epic-transcript-safety/story-end-to-end-security-suite-plan.md`
+  summary: Two forms the tiny model writes for a card read aloud are not redacted: dotted groups ("4.539, 1.488, 0.343, 6.467.") and spaced single digits ("4 5 3 9, 1 4 8 8, 0 3 4 3, 6 4 6 7.").
+  evidence: Story 5 fixture probes with macOS `say` (Daniel) and `WHISPER_MODEL_SIZE=tiny`: "Four five three nine. One four eight eight. ..." gave the dotted form and "Four five three nine, one four eight eight, ..." the spaced form; both came out of `pii.redact` with CARD 0. The committed `call_card.wav` uses "It's four five three nine, ...", which the model writes as `4539-1488-0343-6467` (redacted). Comma and dot are not group separators in the 3.3 digit runs, so a fix is a rule change.
