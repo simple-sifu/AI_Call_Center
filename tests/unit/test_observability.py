@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from test_persistence import _completed_report
+from helpers import sample_persist_report
 
 from call_center.graph import run_pipeline
 from call_center.models import AuditEvent
@@ -19,7 +19,7 @@ SAMPLE = Path(__file__).parent.parent / "fixtures" / "sample.wav"
 
 
 def test_stage_outcomes_from_audit_events():
-    report = _completed_report()
+    report = sample_persist_report(str(SAMPLE))
     outcomes = stage_outcomes_from_report(report)
     assert outcomes["intake"] == "ok"
     assert outcomes["report"] == "ok"
@@ -83,7 +83,7 @@ def test_failed_intake_persists_observability_fields(monkeypatch, tmp_path):
 
 def test_record_from_row_round_trip():
     engine = get_engine()
-    report = _completed_report()
+    report = sample_persist_report(str(SAMPLE))
     call_id = persist_call_report(
         report,
         report_json_path="/r/sample.json",

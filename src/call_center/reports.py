@@ -5,6 +5,7 @@ Reports include the redacted transcript and analysis results only, never the raw
 """
 
 import json
+import os
 from html import escape
 from pathlib import Path
 
@@ -17,6 +18,8 @@ from call_center.models import AuditEvent, QAScores, RunStatus, Summary, Transcr
 from call_center.state import PipelineState
 
 _STRICT = ConfigDict(frozen=True, extra="forbid")
+
+REPORT_STAGE = "report"
 
 
 class CallReport(BaseModel):
@@ -38,6 +41,37 @@ def status_for_report(state: PipelineState) -> RunStatus:
     """Status recorded in the report; a still-``running`` run becomes ``completed``."""
     status = state.get("status", "running")
     return "completed" if status == "running" else status
+
+
+def report_output_dir(state: PipelineState) -> Path:
+    """Directory for JSON/PDF artifacts (state override, env, or default ``reports``)."""
+    if override := state.get("report_output_dir"):
+        return Path(override)
+    if raw := os.environ.get("REPORT_OUTPUT_DIR"):
+        return Path(raw)
+    return Path("reports")
+
+
+def artifact_paths(state: PipelineState) -> tuple[Path, Path]:
+    """``(<stem>.json, <stem>.pdf)`` under ``report_output_dir(state)``."""
+    stem = Path(state["source_file"]).stem
+    out = report_output_dir(state)
+    return out / f"{stem}.json", out / f"{stem}.pdf"
+
+
+def finalized_report(state: PipelineState, report_event: AuditEvent) -> CallReport:
+    """``build_report`` plus the report stage in ``stages_completed`` and ``audit``."""
+    base = build_report(state)
+    return CallReport(
+        source_file=base.source_file,
+        status=base.status,
+        status_reason=base.status_reason,
+        stages_completed=(*base.stages_completed, REPORT_STAGE),
+        audit=(*base.audit, report_event),
+        redacted_transcript=base.redacted_transcript,
+        summary=base.summary,
+        qa_scores=base.qa_scores,
+    )
 
 
 def build_report(state: PipelineState) -> CallReport:
