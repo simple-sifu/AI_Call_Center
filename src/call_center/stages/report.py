@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from call_center.models import AuditEvent
+from call_center.persistence import llm_provider_from_env, persist_call_report
 from call_center.reports import CallReport, build_report, write_json
 from call_center.state import PipelineState
 
@@ -36,6 +37,7 @@ def run(state: PipelineState) -> dict:
         qa_scores=base.qa_scores,
     )
     written = write_json(report, json_path)
+    persist_call_report(report, report_json_path=str(written), llm_provider=llm_provider_from_env())
 
     update: dict = {
         "stages_completed": [NAME],

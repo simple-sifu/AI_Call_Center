@@ -5,6 +5,7 @@ Tests never reach a real ASR model unless marked ``slow``, and never a real LLM 
 marked ``live`` (opt in with ``-m live``; such tests also read the real ``.env``).
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -77,6 +78,18 @@ def _isolated_report_output(
     out = tmp_path / "reports"
     monkeypatch.setenv("REPORT_OUTPUT_DIR", str(out))
     return out
+
+
+@pytest.fixture(autouse=True)
+def _isolated_database(
+    request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> str:
+    """Each test gets its own SQLite file under ``tmp_path``."""
+    if request.node.get_closest_marker("live"):
+        return os.environ.get("DATABASE_URL", "sqlite:///call_center.db")
+    url = f"sqlite:///{tmp_path / 'calls.db'}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    return url
 
 
 class _SilentTranscriber:

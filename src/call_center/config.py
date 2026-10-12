@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     report_output_dir: Path = Field(
         Path("reports"), validation_alias=AliasChoices("REPORT_OUTPUT_DIR")
     )
+    database_url: str = Field(
+        "sqlite:///call_center.db", validation_alias=AliasChoices("DATABASE_URL")
+    )
 
     openai_model: str = Field("gpt-4o", validation_alias=AliasChoices("OPENAI_MODEL"))
     gemini_model: str = Field("gemini-2.0-flash", validation_alias=AliasChoices("GEMINI_MODEL"))
