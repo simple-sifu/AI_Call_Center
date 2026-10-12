@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from helpers import FakeTranscriber
 
 from call_center import asr
 from call_center.cli import main
@@ -17,17 +18,9 @@ INJECTION = [
 REASON = "prompt injection detected: INJ-01 (instruction_override)"
 
 
-class _Fake:
-    def __init__(self, segments):
-        self.segments = list(segments)
-
-    def transcribe(self, path):
-        return self.segments
-
-
 @pytest.fixture
 def injected(monkeypatch):
-    monkeypatch.setattr(asr, "get_transcriber", lambda model_size: _Fake(INJECTION))
+    monkeypatch.setattr(asr, "get_transcriber", lambda model_size: FakeTranscriber(INJECTION))
 
 
 def test_injected_call_is_blocked_and_skips_to_report(injected, llm_guard):

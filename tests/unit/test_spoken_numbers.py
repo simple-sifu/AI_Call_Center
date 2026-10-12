@@ -1,12 +1,10 @@
-import re
 import time
 
 import pytest
+from helpers import UNBOUNDED
 
 from call_center import spoken_numbers
 from call_center.spoken_numbers import digit_reading, find_runs, separator, word_digits
-
-UNBOUNDED = re.compile(r"(?<!\\)[*+](?![^\[]*\])|\{\d*,\}")
 
 
 def _readings(text: str, joins=()) -> list[str]:

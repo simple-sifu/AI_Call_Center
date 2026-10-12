@@ -3,12 +3,20 @@ import re
 import time
 
 import pytest
+from helpers import DIGIT_WORDS, TEEN_WORDS, TENS_WORDS, UNBOUNDED, UNIT_WORDS, ZERO_WORDS
 
+from call_center import pii
 from call_center.models import Transcript, TranscriptSegment
-from call_center.pii import luhn_valid, redact, redact_segments
+from call_center.pii import (
+    _card_windows,
+    _digit_runs,
+    _digit_spans,
+    luhn_valid,
+    redact,
+    redact_segments,
+)
 from call_center.stages import pii_redaction
 
-UNBOUNDED = re.compile(r"(?<!\\)[*+](?![^\[]*\])|\{\d*,\}")
 ZERO = {"SSN": 0, "CARD": 0, "EMAIL": 0, "PHONE": 0}
 
 
@@ -494,8 +502,6 @@ def test_luhn(digits, valid):
 
 
 def test_card_windows_match_brute_force_luhn():
-    from call_center.pii import _card_windows, _digit_runs
-
     rng = random.Random(33)
     for _ in range(2_000):
         groups = [_digits(rng, rng.randint(1, 6)) for _ in range(8)]
@@ -514,8 +520,6 @@ def test_card_windows_match_brute_force_luhn():
 
 
 def test_patterns_are_bounded():
-    from call_center import pii
-
     for name in (
         "_DIGIT_GROUP",
         "_ONE_NUMBER_SHAPE",
@@ -524,6 +528,8 @@ def test_patterns_are_bounded():
         "_EMAIL",
         "_SPOKEN_EMAIL",
         "_DICTATION_TOKEN",
+        "_CARD_SHAPE",
+        "_DATE_SEPARATOR",
     ):
         assert not UNBOUNDED.search(getattr(pii, name).pattern), name
 
@@ -866,39 +872,6 @@ def test_ordinary_number_words_across_segments_are_unchanged():
     assert redact_segments(texts) == (texts, ZERO)
 
 
-UNIT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
-ZERO_WORDS = ["zero", "oh", "o"]
-TEEN_WORDS = [
-    "ten",
-    "eleven",
-    "twelve",
-    "thirteen",
-    "fourteen",
-    "fifteen",
-    "sixteen",
-    "seventeen",
-    "eighteen",
-    "nineteen",
-]
-TENS_WORDS = {
-    "2": "twenty",
-    "3": "thirty",
-    "4": "forty",
-    "5": "fifty",
-    "6": "sixty",
-    "7": "seventy",
-    "8": "eighty",
-    "9": "ninety",
-}
-DIGIT_WORDS = {
-    *UNIT_WORDS,
-    *ZERO_WORDS,
-    *TEEN_WORDS,
-    *TENS_WORDS.values(),
-    "hundred",
-    "double",
-    "triple",
-}
 # Between two groups of a spoken value. Whitespace alone between two number words adds
 # nothing to the reading, so those groups read as one.
 SPOKEN_SEPARATORS = [
@@ -1104,8 +1077,6 @@ def _expected_spans(groups: list[list], opened: int | None, close: int | None, d
     """A spoken run's expected spans by the frozen rules: its reading goes through the 3.3
     detection unchanged, then the whole-run rule, labels by digit count, token-wide
     placeholders and the parenthesis rule."""
-    from call_center.pii import _digit_spans
-
     # The reading, and for each digit its token and whether it is spoken.
     view, joins, digit_tokens = "", [], []
     k = 0
@@ -1564,9 +1535,8 @@ def _dictated_value(rng: random.Random) -> tuple[str, str]:
 
 def _plainly_dictated(texts: list[str]) -> bool:
     """True when the rendering holds no shape the dictated pass treats as non-plain, no
-    written value the 3.3 passes would take first, and no run 3.3 protects as one number."""
-    from call_center import pii
-
+    written value the 3.3 passes would take first, and no run `_digit_spans` protects as
+    one number."""
     joined = " ".join(texts)
     joins, pos = [], 0
     for t in texts[:-1]:
