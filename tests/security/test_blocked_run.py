@@ -80,12 +80,18 @@ def test_llm_stages_never_read_raw_transcript(stage):
 
 def test_pii_redaction_masks_text_and_keeps_timing():
     source = Transcript(
-        segments=[TranscriptSegment(speaker="customer", start=1, end=2, text="SSN 123")],
+        segments=[
+            TranscriptSegment(speaker="agent", start=0, end=1, text="Can I get your social?"),
+            TranscriptSegment(speaker="customer", start=1, end=2.5, text="It's 123-45-6789."),
+        ],
         audio_sha256="a" * 64,
     )
-    redacted = pii_redaction.run({"transcript": source})["redacted_transcript"]
+    result = pii_redaction.run({"transcript": source})
+    redacted = result["redacted_transcript"]
     assert redacted.audio_sha256 == source.audio_sha256
     assert [(s.speaker, s.start, s.end, s.text) for s in redacted.segments] == [
-        ("customer", 1, 2, "[REDACTED]")
+        ("agent", 0, 1, "Can I get your social?"),
+        ("customer", 1, 2.5, "It's [SSN]."),
     ]
+    assert "6789" not in result["audit"][0].detail
     assert pii_redaction.run({})["redacted_transcript"].segments == ()
