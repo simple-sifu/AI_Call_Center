@@ -3,7 +3,7 @@ title: 'Gemini and Groq providers'
 type: 'feature'
 ticket: '2'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: 'ca42ed737df6ce0685b9d2f59db0d37cc9178760'
 route: 'full'
 route_source: 'auto'
