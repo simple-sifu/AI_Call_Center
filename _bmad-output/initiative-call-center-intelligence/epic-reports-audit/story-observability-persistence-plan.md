@@ -3,7 +3,7 @@ title: 'Observability persistence fields'
 type: 'feature'
 ticket: '4'
 created: '2026-10-12'
-status: built
+status: done
 baseline_revision: '9b5bfe8'
 route: 'oneshot'
 route_source: 'auto'
@@ -27,4 +27,4 @@ context: []
 
 ## Verification
 
-**Results (2026-10-12):** pending pytest.
+**Results (2026-10-12):** 1554 passed; ruff clean.
