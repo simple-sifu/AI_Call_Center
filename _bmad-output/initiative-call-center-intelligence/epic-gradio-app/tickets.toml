@@ -1,0 +1,12 @@
+# Epic 6 breakdown, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Gradio two-tab app"
+description = "Gradio 5.x app with Analyze Call (upload, summary, five dimension scores, overall, JSON/PDF downloads, friendly blocked/failed reasons) and Observability (persisted call metrics from SQLite). Exposed via ``call-center ui``."
+verify = "``uv run call-center ui`` serves both tabs; unit tests cover formatters and analyze wiring; pytest and ruff pass."
+covers = ["CAP-9", "CAP-10"]
+after = ["5.6"]
+hitl = true
+risk = "medium"
