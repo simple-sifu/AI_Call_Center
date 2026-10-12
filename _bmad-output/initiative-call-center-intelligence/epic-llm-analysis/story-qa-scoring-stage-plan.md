@@ -3,7 +3,7 @@ title: 'QA scoring stage'
 type: 'feature'
 ticket: '4'
 created: '2026-10-12'
-status: built
+status: done
 baseline_revision: '31445ba7b32ed37a0984eb62e8b58bb410b1d178'
 route: 'full'
 route_source: 'auto'
