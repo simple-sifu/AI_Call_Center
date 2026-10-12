@@ -9,3 +9,7 @@
 - source_plan: `_bmad-output/initiative-call-center-intelligence/epic-transcript-safety/story-pii-redaction-plan.md`
   summary: A PII value split across segments in the middle of a digit group (["123-45-67", "89"]) is not redacted; revisit with story 3.4 (spoken-number PII).
   evidence: Review pass 4 reproduced it (counts 0). Joining digit-to-digit at every segment break reopens the over-matching seen in passes 1-3; the user accepted it as a known gap (2026-10-11).
+- partial: the mid-group split entry above, revisited by story 3.4 (`epic-transcript-safety/story-spoken-number-pii-plan.md`). A spoken run may cross segment joins (the join is a group separator) and is redacted whole when its reading holds a 3.3 value, or 7+ digits with 3+ from number words (["call five five five one two three", "4567 ok"] → ["call [PHONE]", " ok"]). Written values split mid-group with no number word in the run (["123-45-67", "89"]) stay deferred, as accepted.
+- source_plan: `_bmad-output/initiative-call-center-intelligence/epic-transcript-safety/story-spoken-number-pii-plan.md`
+  summary: A date written with a month name ("January 15, 2024") next to spoken digits joins the spoken run and is over-redacted ("January 15, 2024, one two three" → "January [SSN]").
+  evidence: Reproduced on the story 3.4 build; "15" and "2024" are plain digit groups under the frozen run rule, so a month-name date rule would be a rule change.

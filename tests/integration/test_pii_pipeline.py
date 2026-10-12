@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -41,6 +42,39 @@ def test_seeded_values_never_reach_redacted_transcript_or_audit(monkeypatch):
     ]
     [event] = [e for e in state["audit"] if e.stage == "pii_redaction"]
     assert (event.outcome, event.detail) == ("ok", "redacted SSN 1, CARD 1, EMAIL 1, PHONE 1")
+
+
+SPOKEN = [
+    asr.RawSegment(0.0, 1.0, "The card is four one one one, one one one one, one one one one,"),
+    asr.RawSegment(1.0, 2.0, "one one one one. My social is one two three, four five,"),
+    asr.RawSegment(2.0, 3.0, "six seven eight nine. Call eight five five oh one nine nine."),
+    asr.RawSegment(3.0, 4.0, "Thanks. One moment, I have two options."),
+]
+# Every number word the spoken pass reads, so none of the values' words can hide.
+DIGIT_WORDS = {
+    *("zero", "oh", "o", "one", "two", "three", "four", "five", "six", "seven", "eight"),
+    *("nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen"),
+    *("seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty", "fifty", "sixty"),
+    *("seventy", "eighty", "ninety", "hundred", "double", "triple"),
+}
+
+
+def test_spoken_values_never_reach_redacted_transcript(monkeypatch):
+    monkeypatch.setattr(asr, "get_transcriber", lambda model_size: _Fake(SPOKEN))
+    state = run_pipeline(str(CALL_MONO))
+
+    assert state["status"] == "completed", state["status_reason"]
+    texts = [s.text for s in state["redacted_transcript"].segments]
+    assert texts == [
+        "The card is [CARD]",
+        ". My social is [SSN]",
+        ". Call [PHONE].",
+        "Thanks. One moment, I have two options.",
+    ]
+    for text in texts[:3]:
+        assert not DIGIT_WORDS & set(re.split(r"[^a-z]+", text.casefold())), text
+    [event] = [e for e in state["audit"] if e.stage == "pii_redaction"]
+    assert (event.outcome, event.detail) == ("ok", "redacted SSN 1, CARD 1, EMAIL 0, PHONE 1")
 
 
 @pytest.mark.slow
