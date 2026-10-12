@@ -35,6 +35,8 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--strict-markers -m 'not slow'"
+# Some tests write 30-50 MB files; keep temp dirs only for failed tests.
+tmp_path_retention_policy = "failed"
 markers = [
     "unit: fast isolated tests",
     "integration: tests that run the pipeline end to end",
