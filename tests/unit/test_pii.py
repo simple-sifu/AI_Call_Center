@@ -227,8 +227,10 @@ def test_hyphen_at_segment_end_joins_the_value(texts, expected, counts):
     assert redact_segments(texts) == (expected, counts)
 
 
-def test_hyphen_space_inside_a_segment_is_not_a_separator():
-    assert redact("ref 123-45- 6789") == ("ref 123-45- 6789", ZERO)
+def test_hyphen_space_inside_a_segment_is_not_a_written_separator():
+    # Not a 3.3 SSN (a hyphen then a space joins groups only at a segment join), so no
+    # written value cuts the run; the dictated pass (story 7) redacts it whole.
+    assert redact("ref 123-45- 6789") == ("ref [SSN]", _counts(SSN=1))
 
 
 DIGITS = "0123456789"
@@ -399,19 +401,22 @@ def test_card_with_cvv_in_next_segment():
 @pytest.mark.parametrize(
     "text",
     [
-        "1234-5678",
         "a 22345678901 b",
         "a 123456789012 b",
         "a 1234567890123456789 b",
         "x123-45-67890",
-        "0123-45-6789",
-        "5555-123-4567",
         "555-123-45678",
         "90210-1234",
     ],
 )
 def test_digit_matches_never_cut_a_longer_run(text):
     assert redact(text) == (text, ZERO)
+
+
+@pytest.mark.parametrize("text", ["1234-5678", "0123-45-6789", "5555-123-4567"])
+def test_digit_matches_never_cut_a_longer_run_of_short_groups(text):
+    # No 3.3 match cuts the run; the dictated pass (story 7) redacts it whole.
+    assert redact(text) == ("[PHONE]", _counts(PHONE=1))
 
 
 @pytest.mark.parametrize(
@@ -511,7 +516,15 @@ def test_card_windows_match_brute_force_luhn():
 def test_patterns_are_bounded():
     from call_center import pii
 
-    for name in ("_DIGIT_GROUP", "_ONE_NUMBER_SHAPE", "_SSN", "_PHONE", "_EMAIL", "_SPOKEN_EMAIL"):
+    for name in (
+        "_DIGIT_GROUP",
+        "_ONE_NUMBER_SHAPE",
+        "_SSN",
+        "_PHONE",
+        "_EMAIL",
+        "_SPOKEN_EMAIL",
+        "_DICTATION_TOKEN",
+    ):
         assert not UNBOUNDED.search(getattr(pii, name).pattern), name
 
 
@@ -528,6 +541,9 @@ def test_large_text_scans_quickly():
     assert "123-45-6789" not in redacted
     assert counts["CARD"] > 0
     # Pathological input: long runs that never complete a match.
+    # Degenerate inputs guard against super-linear blowup, not raw speed: tens of thousands
+    # of one-digit groups in a single run take ~0.35 s locally and longer on a shared CI
+    # runner, while anything quadratic would take minutes.
     for bad in (
         "1 " * 100_000,
         "1-" * 100_000,
@@ -538,7 +554,7 @@ def test_large_text_scans_quickly():
     ):
         start = time.perf_counter()
         redact(bad)
-        assert time.perf_counter() - start < 0.5
+        assert time.perf_counter() - start < 2.0, bad[:12]
 
 
 def test_stage_keeps_speaker_and_timing_and_audits_counts():
@@ -1088,7 +1104,7 @@ def _expected_spans(groups: list[list], opened: int | None, close: int | None, d
     """A spoken run's expected spans by the frozen rules: its reading goes through the 3.3
     detection unchanged, then the whole-run rule, labels by digit count, token-wide
     placeholders and the parenthesis rule."""
-    from call_center.pii import _find
+    from call_center.pii import _digit_spans
 
     # The reading, and for each digit its token and whether it is spoken.
     view, joins, digit_tokens = "", [], []
@@ -1104,7 +1120,7 @@ def _expected_spans(groups: list[list], opened: int | None, close: int | None, d
             k += count
     assert k == len(d)
     at = [i for i, ch in enumerate(view) if ch != " "]  # view offset of each digit
-    values = [(at.index(s), at.index(e - 1)) for s, e, _ in _find(view, joins)]
+    values = [(at.index(s), at.index(e - 1)) for s, e, _ in _digit_spans(view, joins)]
 
     def spoken(lo: int, hi: int) -> int:
         return sum(digit_tokens[i][2] for i in range(lo, hi + 1))
@@ -1305,3 +1321,364 @@ def test_stage_redacts_spoken_values_and_counts_them():
         "call me on [PHONE], thanks",
     ]
     assert result["audit"][0].detail == "redacted SSN 1, CARD 1, EMAIL 0, PHONE 1"
+
+
+# Dictated digits (story 7): short digit groups split by commas, dots or hyphen fragments.
+
+ASR_PROBES = [
+    # Real tiny-model outputs from ``say`` probes (2026-10-12).
+    ("4-5-39, 1-48-8, 0-3-4-3, 6-4-6-7.", "[CARD].", _counts(CARD=1)),
+    ("5 4 2 5, 2 3 3 4, 3 0 1 0, 9 9 0 3.", "[CARD].", _counts(CARD=1)),
+    ("4.539, 1.488, 0.343, 6.467.", "[CARD].", _counts(CARD=1)),
+    ("1, 2, 3, 4, 5, 6, 7, 8, 9.", "[SSN].", _counts(SSN=1)),
+]
+
+
+@pytest.mark.parametrize(("text", "expected", "counts"), ASR_PROBES)
+def test_real_asr_dictated_values_are_redacted(text, expected, counts):
+    assert redact(text) == (expected, counts)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected", "counts"),
+    [
+        ("4539, 1488, 0343, 6467", "[CARD]", _counts(CARD=1)),
+        ("555, 212, 4367", "[PHONE]", _counts(PHONE=1)),
+        ("123. 45. 6789", "[SSN]", _counts(SSN=1)),
+        ("555-212, 4367", "[PHONE]", _counts(PHONE=1)),
+        ("It's 4-5-39, 1-48-8, 0-3-4-3, 6-4-6-7, thanks", "It's [CARD], thanks", _counts(CARD=1)),
+        ("card 4.539,1.488,0.343,6.467 ok", "card [CARD] ok", _counts(CARD=1)),
+        ("ssn 1 2 3, 4 5, 6 7 8 9 ok", "ssn [SSN] ok", _counts(SSN=1)),
+        ("call 555. 1234 now", "call [PHONE] now", _counts(PHONE=1)),
+        # A date-like shape without a 4-digit year is read as its groups.
+        ("1-15-24, 3 4 5 6", "[SSN]", _counts(SSN=1)),
+        ("4-5, 1-15-24", "[PHONE]", _counts(PHONE=1)),
+        # Only a currency sign makes an amount; a bare decimal is groups.
+        ("4539, 1488, 0343, 6467, 19.99", "[CARD]", _counts(CARD=1)),
+        ("4.53, 9.14, 88 ok", "[PHONE] ok", _counts(PHONE=1)),
+        ("4539, 1488, 0343, 6467, $19.99", "[CARD], $19.99", _counts(CARD=1)),
+    ],
+)
+def test_comma_and_dot_groups_are_redacted(text, expected, counts):
+    assert redact(text) == (expected, counts)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected", "counts"),
+    [
+        ("It's 1-2-3-4-5-6-7-8-9", "It's [SSN]", _counts(SSN=1)),
+        ("call 555 1234 today", "call [PHONE] today", _counts(PHONE=1)),
+        ("(555), 212, 4367", "[PHONE]", _counts(PHONE=1)),
+        ("call (555) 21 2 4367 now", "call [PHONE] now", _counts(PHONE=1)),
+        ("ssn 1 2 3 4 5 6 7 8 9 ok", "ssn [SSN] ok", _counts(SSN=1)),
+    ],
+)
+def test_hyphen_and_space_fragments_are_redacted(text, expected, counts):
+    assert redact(text) == (expected, counts)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected", "counts"),
+    [
+        ("ssn 1-23-45 6789", "ssn [SSN]", _counts(SSN=1)),
+        ("ssn 1-23-45 6-7-8-9", "ssn [SSN]", _counts(SSN=1)),
+        ("ssn 1.2.3.4.5.6.7.8.9", "ssn [SSN]", _counts(SSN=1)),
+        ("ssn 1, 2, 3, 4, 5, 6, 7, 8.9", "ssn [SSN]", _counts(SSN=1)),
+        ("card 4539, 1488, 0343, 6467.5", "card [CARD]", _counts(CARD=1)),
+        ("4.539, 1.488, 0.343, 6.46", "[CARD]", _counts(CARD=1)),
+    ],
+)
+def test_review_pass_1_leaks_are_redacted(text, expected, counts):
+    assert redact(text) == (expected, counts)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected", "counts"),
+    [
+        ("acct 1234-567-89012", "acct [CARD]", _counts(CARD=1)),
+        ("ref 12345-1234-567", "ref [CARD]", _counts(CARD=1)),
+        ("order 98765 4321 123", "order [CARD]", _counts(CARD=1)),
+    ],
+)
+def test_dictated_run_is_never_cut_by_a_long_group(text, expected, counts):
+    assert redact(text) == (expected, counts)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "1234-567-89012-345-6789",
+        "123 4567 89012 345 6789",
+        "12-345-67890 1234 567",
+        "1 23456 7 8 9 0 1 2 3",
+    ],
+)
+def test_chain_of_runs_and_long_groups_is_one_value(text):
+    assert redact(text) == ("[CARD]", _counts(CARD=1))
+
+
+def test_chain_across_a_segment_join_is_one_value():
+    texts = ["call 555 1234", "89012 1 2 3 4 5 6 7"]
+    assert redact_segments(texts) == (["call [CARD]", ""], _counts(CARD=1))
+
+
+def test_comma_thousands_never_starts_after_a_decimal_point():
+    assert redact("4.539,148,803") == ("[PHONE]", _counts(PHONE=1))
+    assert redact("1,250,000 customers") == ("1,250,000 customers", ZERO)
+
+
+def test_long_group_across_a_segment_join_is_covered():
+    texts = ["acct 1234-567", "89012 ok"]
+    assert redact_segments(texts) == (["acct [CARD]", " ok"], _counts(CARD=1))
+
+
+def test_hyphen_fragments_split_across_segments():
+    texts = ["my social is 1-2-3", "4-5-6-7-8-9 thanks"]
+    assert redact_segments(texts) == (["my social is [SSN]", " thanks"], _counts(SSN=1))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "4111 1111 1111 1112",
+        "ref 4111-1111-1111-1112 ok",
+        "ref 1234 567890 12345",
+        "ref 1234 5678 9012 3456 7",
+        "ref 1234567890123456",
+        "ref 1234 5678 9012 3456, 7",
+    ],
+)
+def test_runs_protected_as_one_number_are_kept(text):
+    assert redact(text) == (text, ZERO)
+
+
+def test_dictated_value_split_across_segments():
+    texts = ["card 4 5 3 9, 1 4 8 8,", "0 3 4 3, 6 4 6 7 ok"]
+    assert redact_segments(texts) == (["card [CARD]", " ok"], _counts(CARD=1))
+
+
+@pytest.mark.parametrize(
+    ("texts", "expected", "counts"),
+    [
+        (["ssn 123,", "45, 6789 ok"], ["ssn [SSN]", " ok"], _counts(SSN=1)),
+        (["ssn 123", ", 45. 6789"], ["ssn [SSN]", ""], _counts(SSN=1)),
+        (["call 555-", "212, 4367"], ["call [PHONE]", ""], _counts(PHONE=1)),
+        (["4.539, 1.488,", "0.343,", "6.467."], ["[CARD]", "", "."], _counts(CARD=1)),
+        # A segment join alone joins two groups; the comma sits elsewhere.
+        (["call 555, 21", "2 4367"], ["call [PHONE]", ""], _counts(PHONE=1)),
+    ],
+)
+def test_dictated_value_across_segment_joins(texts, expected, counts):
+    assert redact_segments(texts) == (expected, counts)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "options 1, 2, 3",
+        "rooms 4.5, 6",
+        "pick 1, 2, or 3",
+        "$1,234.56",
+        "1,250,000 customers",
+        "on 1.15.2024",
+        "at 10:30, 11:45",
+        "Due 2024-01-15, 1234",
+        "dob 1-15-1980, 1234",
+        "on 1.15.2024. 3 4 5",
+    ],
+)
+def test_short_lists_and_formatted_numbers_are_unchanged(text):
+    assert redact(text) == (text, ZERO)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected", "counts"),
+    [
+        # Accepted cost (plan): a comma list of short numbers with 7+ digits in all.
+        ("rooms 101, 102, 103", "rooms [SSN]", _counts(SSN=1)),
+        ("1, 2, 3, 4, 5, 6, 7", "[PHONE]", _counts(PHONE=1)),
+        ("page 12 13 14 15", "page [PHONE]", _counts(PHONE=1)),
+        ("in 2019, 2020 and 2021", "in [PHONE] and 2021", _counts(PHONE=1)),
+        ("rates 1.25, 2.50, 3.75", "rates [SSN]", _counts(SSN=1)),
+    ],
+)
+def test_long_short_number_lists_are_redacted_accepted_cost(text, expected, counts):
+    assert redact(text) == (expected, counts)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected", "counts"),
+    [
+        ("555-212-4367, 8", "[PHONE], 8", _counts(PHONE=1)),
+        ("my SSN is 123-45-6789, 12", "my SSN is [SSN], 12", _counts(SSN=1)),
+        ("card 4111 1111 1111 1111, 12, 3", "card [CARD], 12, 3", _counts(CARD=1)),
+    ],
+)
+def test_earlier_values_are_unchanged_and_short_rest_kept(text, expected, counts):
+    assert redact(text) == (expected, counts)
+
+
+DICTATION_BENIGN = [
+    "options 1, 2, 3, or 4",
+    "rooms 4.5, 6",
+    "That's $1,234.56, $2,000.00 and $15.",
+    "We have 1,250,000 customers and 2,500,000 users.",
+    "It's 10:30, 11:45 or 12:15, maybe 1:30.",
+    "Due on 1.15.2024 or 2024-01-15, or 1/15/2024.",
+    "Version 3.4.1, 2.0",
+    "scores 9.5, 8.75",
+    "between 10 and 20, or 30, 40",
+    "Flights UA123, BA456, LH789.",
+    "Order 48213, 7731.",
+    "Ticket #12345, 678.",
+    "It costs 19.99, or 29.99, or 4.99.",
+    "Steps 1, 2 and 3. Then 4, 5.",
+    "Page 12, line 3.",
+]
+
+
+@pytest.mark.parametrize("text", DICTATION_BENIGN)
+def test_dictation_benign_text_is_unchanged(text):
+    assert redact(text) == (text, ZERO)
+
+
+DICTATION_SEPARATORS = {
+    "mixed": [", ", ",", ". ", ".", " , ", ",  ", ", -", "-", " ", " - ", "- ", ") ", " (", "), "],
+    "hyphen": ["-"],
+    "space": [" "],
+}
+
+
+def _dictated_value(rng: random.Random) -> tuple[str, str]:
+    """Random digits of a card, SSN or phone, and the kind they are labelled."""
+    roll = rng.random()
+    if roll < 0.4:
+        d = _valid_card(rng, rng.choice([16, 16, 15, 13, 14, 17, 18, 19]))
+    elif roll < 0.65:
+        d = _digits(rng, 9)
+    else:
+        d = rng.choice(["", "1"]) + _digits(rng, rng.choice([7, 10, 10]))
+    kind = "SSN" if len(d) == 9 else "CARD" if len(d) >= 12 else "PHONE"
+    return kind, d
+
+
+def _plainly_dictated(texts: list[str]) -> bool:
+    """True when the rendering holds no shape the dictated pass treats as non-plain, no
+    written value the 3.3 passes would take first, and no run 3.3 protects as one number."""
+    from call_center import pii
+
+    joined = " ".join(texts)
+    joins, pos = [], 0
+    for t in texts[:-1]:
+        pos += len(t)
+        joins.append(pos)
+        pos += 1
+    protected: list[tuple[int, int]] = []
+    if pii._digit_spans(pii._mark_joins(joined, joins), joins, protected) or protected:
+        return False
+    for m in pii._DICTATION_TOKEN.finditer(joined):
+        if m.lastgroup in ("amount", "time", "thousands", "long"):
+            return False
+        if m.lastgroup == "date" and pii._valid_date(m.group()):
+            return False
+    return True
+
+
+def _render_dictation(
+    rng: random.Random, d: str, prefix: str, suffix: str, style: str
+) -> list[str]:
+    """``d`` as random groups of 1-4 digits with random separators of ``style`` (mixed,
+    hyphen-only or space-only), split into 1-3 segments at random separators or inside
+    groups."""
+    groups, i = [], 0
+    while i < len(d):
+        n = rng.randint(1, 4)
+        groups.append(d[i : i + n])
+        i += n
+    seps = [rng.choice(DICTATION_SEPARATORS[style]) for _ in groups[1:]]
+    pieces = [groups[0]]
+    for sep, group in zip(seps, groups[1:], strict=True):
+        pieces += [sep, group]
+    # Split points: inside a separator, or between two digits of a group.
+    cuts = rng.sample(range(1, len(pieces)), k=min(rng.choice([0, 0, 1, 1, 2]), len(pieces) - 1))
+    texts, current = [], prefix
+    for k, piece in enumerate(pieces):
+        if k in cuts:
+            at = rng.randint(0, len(piece)) if k % 2 else rng.randint(1, max(1, len(piece) - 1))
+            if not k % 2 and len(piece) < 2:
+                at = 0
+            texts.append(current + piece[:at])
+            current = piece[at:]
+        else:
+            current += piece
+    texts.append(current + suffix)
+    return texts
+
+
+# A date-like shape without a 4-digit year, read as ordinary groups.
+DATE_LIKE = re.compile(r"(?<![0-9])[0-9]{1,2}[-.][0-9]{1,2}[-.][0-9]{2}(?![0-9])")
+
+
+def test_property_dictated_values():
+    rng = random.Random(3313)
+    checked = split = 0
+    kinds: set[str] = set()
+    styles: dict[str, int] = dict.fromkeys(DICTATION_SEPARATORS, 0)
+    date_like = trailing_decimal = 0
+    while checked < 3_000:
+        kind, d = _dictated_value(rng)
+        prefix = rng.choice(["card ", "my number is ", "it's ", "ssn: ", ""])
+        suffix = rng.choice([" ok", ".", ", thanks", "", "!"])
+        style = rng.choice(list(DICTATION_SEPARATORS))
+        texts = _render_dictation(rng, d, prefix, suffix, style)
+        if not _plainly_dictated(texts):
+            continue
+        checked += 1
+        styles[style] += 1
+        joined = " ".join(texts)
+        date_like += DATE_LIKE.search(joined) is not None
+        trailing_decimal += re.search(r"[0-9]\.[0-9]{1,2}(?:\.|\W*$|\W+[a-z])", joined) is not None
+        split += len(texts) > 1
+        kinds.add(kind)
+        expected = [prefix + f"[{kind}]"] + [""] * (len(texts) - 2) + [suffix]
+        if len(texts) == 1:
+            expected = [prefix + f"[{kind}]" + suffix]
+        assert redact_segments(texts) == (expected, _expected_counts(kind)), texts
+        assert re.sub(r"\D", "", "".join(texts)) == d
+    assert kinds == {"CARD", "SSN", "PHONE"}
+    assert split > 1_000
+    assert min(styles.values()) > 600, styles
+    assert date_like > 60 and trailing_decimal > 30, (date_like, trailing_decimal)
+
+
+def test_dictation_scans_quickly():
+    chunk = (
+        "my card is 4-5-39, 1-48-8, 0-3-4-3, 6-4-6-7. ssn 1, 2, 3, 4, 5, 6, 7, 8, 9. "
+        "or 4.539, 1.488, 0.343, 6.467, options 1, 2, 3 at 10:30, 11:45 for $1,234.56, "
+        "1,250,000 customers on 1.15.2024 call 555-212-4367, 8. "
+    )
+    text = (chunk * (200_000 // len(chunk) + 1))[:200_000]
+    start = time.perf_counter()
+    redacted, counts = redact(text)
+    assert time.perf_counter() - start < 0.5
+    assert "0-3-4-3" not in redacted and "1.488" not in redacted
+    assert counts["CARD"] > 0 and counts["SSN"] > 0 and counts["PHONE"] > 0
+    # Degenerate inputs guard against super-linear blowup, not raw speed: tens of thousands
+    # of one-digit groups in a single run take ~0.35 s locally and longer on a shared CI
+    # runner, while anything quadratic would take minutes.
+    for bad in (
+        "1, " * 60_000,
+        "1." * 100_000,
+        "1,2" * 60_000,
+        "12, x " * 30_000,
+        "1-1-11, " * 25_000,
+        "1 ,  " * 40_000,
+        "1,   ,   " * 20_000,
+        "1,000," * 30_000,
+        "9.99, " * 30_000,
+        "12345 " * 30_000,
+        "1 12345 " * 25_000,
+    ):
+        start = time.perf_counter()
+        redact(bad)
+        assert time.perf_counter() - start < 2.0, bad[:12]

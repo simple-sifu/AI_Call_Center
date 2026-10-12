@@ -56,12 +56,23 @@ hitl = false
 risk = "medium"
 
 [[entry]]
+id = 7
+type = "story"
+title = "ASR digit formats"
+description = "Redacts card, SSN, and phone values that the ASR writes as short digit groups joined by commas, dots, hyphens, parentheses, spaces or segment joins ('4.539, 1.488, 0.343, 6.467.', '4-5-39, 1-48-8, ...', '1-2-3' + '4-5-6-7-8-9'), found by the story 5 fixture probes; a run of 7+ digits is redacted whole, so long lists of short numbers may be redacted too (accepted cost: 'rooms 101, 102, 103', 'rates 1.25, 2.50, 3.75'), while currency amounts, times, dates with a 4-digit year, comma-thousands numbers and runs 3.3 protects as one number stay as written."
+verify = "The real ASR forms of the test card and SSN are redacted as [CARD] and [SSN], seeded property tests over random values in those forms pass with exact output, the 3.3 and 3.4 suites pass unchanged except four 3.3 cases that now expect whole-run redaction ('ref 123-45- 6789', '1234-5678', '0123-45-6789', '5555-123-4567'), and the say-generated dictation call transcribed by the tiny model holds no card or SSN digits after redaction."
+covers = ["R3"]
+after = [3, 4, 5]
+hitl = false
+risk = "medium"
+
+[[entry]]
 id = 6
 type = "story"
 title = "Refactor sweep"
 description = "Cleanup only across the epic, scoped when it starts from the plans and deferred review findings."
 verify = "pytest and ruff pass with no behavior change."
 covers = []
-after = [1, 2, 3, 4, 5]
+after = [1, 2, 3, 4, 5, 7]
 hitl = false
 risk = "low"
