@@ -1,4 +1,5 @@
-"""Shared fixtures: folder markers, config isolation and the fake ASR and chat model.
+"""Shared fixtures: folder markers, config isolation, the fake ASR and chat model, and
+the recorded LLM retry backoff.
 
 Tests never reach a real ASR model unless marked ``slow``, and never a real LLM unless
 marked ``live`` (opt in with ``-m live``; such tests also read the real ``.env``).
@@ -96,3 +97,15 @@ def fake_chat_model(
 
     monkeypatch.setattr(llm, "get_chat_model", get_chat_model)
     return fake
+
+
+@pytest.fixture(autouse=True)
+def backoff_sleeps(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> list:
+    """Record each retry backoff ``llm_call`` asks for instead of sleeping (not ``live``)."""
+    delays: list[float] = []
+    if request.node.get_closest_marker("live"):
+        return delays
+    from call_center import llm_call
+
+    monkeypatch.setattr(llm_call, "sleep", delays.append)
+    return delays

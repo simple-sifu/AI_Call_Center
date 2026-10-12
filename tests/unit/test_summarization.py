@@ -213,13 +213,15 @@ def test_empty_transcript_still_renders_delimiters():
 def test_invalid_output_fails_the_stage(fake_chat_model, output):
     fake_chat_model.output = output
     result = summarization.run(_state())
-    _assert_failed(result, "summarization failed: openai returned invalid output")
+    _assert_failed(result, "summarization failed: openai returned invalid output after 2 attempts")
+    assert len(fake_chat_model.calls) == 2
 
 
 def test_unparseable_output_fails_as_invalid_output(fake_chat_model):
     fake_chat_model.output = OutputParserException(f"Invalid json output: {SECRET_TEXT}")
     _assert_failed(
-        summarization.run(_state()), "summarization failed: openai returned invalid output"
+        summarization.run(_state()),
+        "summarization failed: openai returned invalid output after 2 attempts",
     )
 
 
@@ -228,7 +230,9 @@ def test_invalid_output_halts_before_qa_scoring(fake_chat_model):
     state = run_pipeline(str(SAMPLE))
     assert state["stages_completed"] == FAILED_STAGES
     assert state["status"] == "failed"
-    assert state["status_reason"] == "summarization failed: openai returned invalid output"
+    assert state["status_reason"] == (
+        "summarization failed: openai returned invalid output after 2 attempts"
+    )
     assert state["summary"] is None
     assert state["qa_scores"] is None
     assert [(e.stage, e.outcome) for e in state["audit"][-2:]] == [
@@ -248,21 +252,24 @@ def _status_error(cls, status: int):
 
 
 @pytest.mark.parametrize(
-    ("error", "kind"),
+    ("error", "kind", "attempts"),
     [
-        (openai.APITimeoutError(request=_REQUEST), "APITimeoutError"),
-        (_status_error(openai.AuthenticationError, 401), "AuthenticationError"),
-        (_status_error(openai.RateLimitError, 429), "RateLimitError"),
-        (openai.APIConnectionError(request=_REQUEST), "APIConnectionError"),
-        (TimeoutError(SECRET_TEXT), "TimeoutError"),
+        (openai.APITimeoutError(request=_REQUEST), "APITimeoutError", 3),
+        (_status_error(openai.AuthenticationError, 401), "AuthenticationError", 1),
+        (_status_error(openai.RateLimitError, 429), "RateLimitError", 3),
+        (openai.APIConnectionError(request=_REQUEST), "APIConnectionError", 3),
+        (TimeoutError(SECRET_TEXT), "TimeoutError", 3),
     ],
-    ids=lambda v: v if isinstance(v, str) else type(v).__name__,
+    ids=lambda v: v if isinstance(v, str) else str(v) if isinstance(v, int) else type(v).__name__,
 )
-def test_provider_error_fails_the_stage(fake_chat_model, error, kind):
+def test_provider_error_fails_the_stage(fake_chat_model, backoff_sleeps, error, kind, attempts):
     fake_chat_model.output = error
     result = summarization.run(_state())
-    _assert_failed(result, f"summarization failed: openai provider error ({kind})")
-    assert len(fake_chat_model.calls) == 1  # no retries
+    _assert_failed(
+        result, f"summarization failed: openai provider error ({kind}) after {attempts} attempts"
+    )
+    assert len(fake_chat_model.calls) == attempts
+    assert backoff_sleeps == [2.0, 4.0][: attempts - 1]
 
 
 # Missing key, with the real factory
@@ -366,3 +373,112 @@ def test_pipeline_holds_the_fake_summary_and_keeps_the_stage_order(fake_chat_mod
     [event] = [e for e in state["audit"] if e.stage == "summarization"]
     assert (event.outcome, event.detail) == ("ok", "summarized with openai gpt-4o")
     assert len(fake_chat_model.calls) == 1
+
+
+# Retries and the failure policy (story 4.3)
+
+NO_PURPOSE = {k: v for k, v in FAKE_SUMMARY.items() if k != "call_purpose"}
+
+
+def _rate_limit():
+    return _status_error(openai.RateLimitError, 429)
+
+
+def test_one_invalid_then_valid_notes_the_attempts(fake_chat_model, backoff_sleeps):
+    fake_chat_model.outputs = [{**NO_PURPOSE, "extra": SECRET_TEXT}, dict(FAKE_SUMMARY)]
+    result = summarization.run(_state())
+    assert result["summary"] == Summary.model_validate(FAKE_SUMMARY)
+    [event] = result["audit"]
+    assert (event.outcome, event.detail) == (
+        "ok",
+        "summarized with openai gpt-4o after 2 attempts",
+    )
+    first, second = fake_chat_model.calls
+    assert second[:2] == first and len(second) == 3
+    correction = second[2].content
+    assert "call_purpose" in correction
+    assert SECRET_TEXT not in correction and "Biscuit" not in correction
+    assert backoff_sleeps == []
+
+
+def test_rate_limit_then_valid_backs_off_once(fake_chat_model, backoff_sleeps):
+    fake_chat_model.outputs = [_rate_limit(), dict(FAKE_SUMMARY)]
+    result = summarization.run(_state())
+    assert result["summary"] == Summary.model_validate(FAKE_SUMMARY)
+    assert result["audit"][0].detail == "summarized with openai gpt-4o after 2 attempts"
+    assert backoff_sleeps == [2.0]
+
+
+def test_transient_three_times_names_the_last_error(fake_chat_model, backoff_sleeps):
+    fake_chat_model.outputs = [
+        openai.APITimeoutError(request=_REQUEST),
+        _status_error(openai.InternalServerError, 503),
+        openai.APIConnectionError(request=_REQUEST),
+    ]
+    _assert_failed(
+        summarization.run(_state()),
+        "summarization failed: openai provider error (APIConnectionError) after 3 attempts",
+    )
+    assert backoff_sleeps == [2.0, 4.0]
+
+
+def test_transient_then_invalid_twice_fails_as_invalid(fake_chat_model):
+    fake_chat_model.outputs = [_rate_limit(), NO_PURPOSE, NO_PURPOSE]
+    _assert_failed(
+        summarization.run(_state()),
+        "summarization failed: openai returned invalid output after 3 attempts",
+    )
+
+
+def test_pipeline_failure_after_retries_reaches_report(fake_chat_model):
+    fake_chat_model.outputs = [_rate_limit(), NO_PURPOSE, NO_PURPOSE]
+    state = run_pipeline(str(SAMPLE))
+    reason = "summarization failed: openai returned invalid output after 3 attempts"
+    assert state["stages_completed"] == FAILED_STAGES
+    assert (state["status"], state["status_reason"]) == ("failed", reason)
+    assert state["summary"] is None and state["qa_scores"] is None
+    assert [(e.stage, e.outcome, e.detail) for e in state["audit"][-2:]][0] == (
+        "summarization",
+        "failed",
+        reason,
+    )
+    assert state["audit"][-1].stage == "report"
+    assert len(fake_chat_model.calls) == 3
+
+
+def _random_answer(rng):
+    return rng.choice(
+        [
+            lambda: dict(FAKE_SUMMARY),
+            lambda: NO_PURPOSE,
+            lambda: {**FAKE_SUMMARY, "extra": SECRET_TEXT},
+            lambda: f"Here you go: {SECRET_TEXT}",
+            lambda: OutputParserException(SECRET_TEXT),
+            lambda: _rate_limit(),
+            lambda: _status_error(openai.InternalServerError, 500),
+            lambda: openai.APITimeoutError(request=_REQUEST),
+            lambda: _status_error(openai.AuthenticationError, 401),
+            lambda: TimeoutError(SECRET_TEXT),
+            lambda: RuntimeError(SECRET_TEXT),
+        ]
+    )()
+
+
+@pytest.mark.parametrize("seed", range(100))
+def test_any_sequence_stays_in_budget_and_out_of_the_reason(fake_chat_model, seed):
+    import random
+
+    rng = random.Random(seed)
+    fake_chat_model.outputs = [_random_answer(rng) for _ in range(5)]
+    result = summarization.run(_state())
+    assert len(fake_chat_model.calls) <= 3
+    if result.get("status") == "failed":
+        _assert_failed(result, result["status_reason"])
+        assert re.fullmatch(
+            r"summarization failed: openai (returned invalid output|provider error \(\w+\)) "
+            r"after [123] attempts",
+            result["status_reason"],
+        )
+    else:
+        assert isinstance(result["summary"], Summary)
+        assert SECRET_TEXT not in result["audit"][0].detail

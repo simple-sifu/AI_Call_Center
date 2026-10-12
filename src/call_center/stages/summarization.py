@@ -1,24 +1,25 @@
-"""Summarization stage: the redacted transcript to a ``Summary`` in one LLM call.
+"""Summarization stage: the redacted transcript to a ``Summary`` through ``llm_call``.
 
 Reads only ``redacted_transcript``. The transcript goes to the model as speaker-labelled
 lines between ``<transcript>`` delimiters, and the system prompt says it is data, not
 instructions. The model answers in structured output, asked for the way the factory says
-suits the provider (``llm.structured_output_args``), and the answer is validated with
-``Summary.model_validate``; nothing else reaches the state. One call per run, no retries.
+suits the provider, and the answer is validated with ``Summary.model_validate``; nothing
+else reaches the state. ``llm_call.invoke_structured_counted`` makes the call and owns
+the retry budget: at most 3 calls per run, one retry for invalid output and up to two for
+transient provider errors.
 
 Any failure (configuration, missing key, provider error, invalid output) sets status
-``failed`` with a reason naming the provider and the kind of error. Reasons hold only
-exception class names, never transcript or model text.
+``failed`` with a reason naming the provider, the kind of error and, for a call that was
+made, the number of attempts. Reasons hold only exception class names, never transcript
+or model text.
 """
 
-import json
 import re
 
-from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
-from call_center import llm
+from call_center import llm, llm_call
 from call_center.config import format_config_error, load_settings
 from call_center.models import AuditEvent, Summary, Transcript
 from call_center.state import PipelineState
@@ -50,9 +51,6 @@ OPEN, CLOSE = "<transcript>", "</transcript>"
 # A delimiter written inside an utterance could end the data block early.
 _DELIMITER = re.compile(r"<\s*/?\s*transcript\s*>", re.IGNORECASE)
 _WHITESPACE = re.compile(r"\s+")
-
-# Output the model gave that is not a valid ``Summary``.
-_INVALID_OUTPUT = (ValidationError, OutputParserException, json.JSONDecodeError)
 
 
 def render_transcript(transcript: Transcript) -> str:
@@ -105,21 +103,24 @@ def run(state: PipelineState) -> dict:
     except llm.LLMConfigError as error:
         return _failed(str(error))
     try:
-        structured = model.with_structured_output(**llm.structured_output_args(provider, Summary))
-        answer = structured.invoke(messages(redacted))
-    except _INVALID_OUTPUT:
-        return _failed(f"{provider} returned invalid output")
-    except Exception as error:  # any provider failure halts the run; none escapes the graph
-        return _failed(f"{provider} provider error ({type(error).__name__})")
-    if isinstance(answer, BaseModel):
-        answer = answer.model_dump()
-    try:
-        summary = Summary.model_validate(answer)
-    except ValidationError:
-        return _failed(f"{provider} returned invalid output")
+        summary, attempts = llm_call.invoke_structured_counted(
+            model, provider, Summary, messages(redacted)
+        )
+    except llm_call.LLMCallError as error:
+        return _failed(_call_failure(error))
     detail = f"summarized with {provider} {llm.model_name(settings)}"
+    if attempts > 1:
+        detail += f" after {attempts} attempts"
     return {
         "stages_completed": [NAME],
         "summary": summary,
         "audit": [AuditEvent(stage=NAME, outcome="ok", detail=detail)],
     }
+
+
+def _call_failure(error: llm_call.LLMCallError) -> str:
+    if error.kind == "invalid_output":
+        cause = f"{error.provider} returned invalid output"
+    else:
+        cause = f"{error.provider} provider error ({error.error_class})"
+    return f"{cause} after {error.attempts} attempts"

@@ -60,10 +60,17 @@ FAKE_SUMMARY = {
 }
 
 
+class FakeAnswersExhausted(BaseException):
+    """A call past the end of ``FakeChatModel.outputs``. Not an ``Exception``, so the
+    helper's catch-all cannot turn it into an ordinary provider error."""
+
+
 class FakeChatModel:
-    """Fake chat model: answers every structured-output call with ``output``.
+    """Fake chat model: answers each structured-output call with ``output``.
 
     Set ``output`` to another dict to change the answer, or to an exception to raise it.
+    Set ``outputs`` to a sequence of answers and exceptions to give one per call, in
+    order; it overrides ``output``, and a call past its end fails the test.
     ``calls`` holds the messages of each call, ``schemas`` the requested schemas,
     ``methods`` the requested structured-output methods and ``settings`` the settings
     each factory call received.
@@ -71,6 +78,7 @@ class FakeChatModel:
 
     def __init__(self) -> None:
         self.output: object = dict(FAKE_SUMMARY)
+        self.outputs: list[object] | None = None
         self.calls: list[list] = []
         self.schemas: list[object] = []
         self.methods: list[object] = []
@@ -83,6 +91,13 @@ class FakeChatModel:
 
     def invoke(self, messages, *args, **kwargs):
         self.calls.append(list(messages))
-        if isinstance(self.output, BaseException):
-            raise self.output
-        return self.output
+        if self.outputs is None:
+            answer = self.output
+        else:
+            index = len(self.calls) - 1
+            if index >= len(self.outputs):
+                raise FakeAnswersExhausted(f"call {index + 1} has no fake answer")
+            answer = self.outputs[index]
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
