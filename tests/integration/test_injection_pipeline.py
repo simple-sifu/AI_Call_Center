@@ -30,8 +30,9 @@ def injected(monkeypatch):
     monkeypatch.setattr(asr, "get_transcriber", lambda model_size: _Fake(INJECTION))
 
 
-def test_injected_call_is_blocked_and_skips_to_report(injected):
+def test_injected_call_is_blocked_and_skips_to_report(injected, llm_guard):
     state = run_pipeline(str(CALL_MONO))
+    llm_guard.assert_not_run()
 
     assert state["status"] == "blocked"
     assert state["status_reason"] == REASON
@@ -59,9 +60,10 @@ def test_cli_blocked_by_real_detector_exits_2(injected, tmp_path, capsys):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("name", ["call_stereo.wav", "call_mono.wav"])
-def test_real_fixture_calls_are_not_blocked(monkeypatch, name):
+def test_real_fixture_calls_are_not_blocked(monkeypatch, llm_guard, name):
     monkeypatch.setenv("WHISPER_MODEL_SIZE", "tiny")
     state = run_pipeline(str(FIXTURES / name))
+    llm_guard.assert_redacted_only()
 
     assert state["status"] == "completed", state["status_reason"]
     assert state["transcript"].segments

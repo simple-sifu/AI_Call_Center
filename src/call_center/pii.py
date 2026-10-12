@@ -7,18 +7,23 @@ byte-identical.
 
 Emails (written, then spoken) are found first, so digits inside an address cannot break it
 up. Then SSN and phone candidates are found. Then each run of digit groups joined by single
-spaces or hyphens is examined for cards: a 13-19 digit window that starts and ends on a
-group boundary, passes Luhn and overlaps no SSN/phone candidate. Card-shaped windows
-(``4-4-4-4``, ``4-6-5``, ``4-4-4-4-3`` or one unbroken group) are preferred, then 16 digits,
-then 15, then leftmost; the best is taken and the rest of the run is searched again, so a
-stray group or CVV beside a card does not join it. When an equally good window overlaps a
-chosen one and covers digits nothing else claimed (a 4-digit group beside a 4-4-4-4 card
-can make both readings valid), the text cannot say which is the card, so their union is
-redacted, erring toward privacy. A run with no card that is shaped like one number (13-19
-unbroken digits, or card-style groups) is protected, so a 16-digit reference number is
-never half-redacted as phones. The SSN/phone candidates then claim what cards and protected
-runs left. Each pass runs on a working copy where claimed spans are masked out, so offsets
-stay aligned with the original text. Every quantifier is bounded.
+spaces or hyphens is examined for cards. A run holding an unbroken group of 20 or more
+digits is one card whole, with every group joined to that group (an ASR repetition loop
+over a card read aloud can turn part of it into one long digit string, so the groups
+before the loop are card digits too; a 20+ digit reference number is masked too, an
+accepted cost). In the rest, a card is a 13-19 digit
+window that starts and ends on a group boundary, passes Luhn and overlaps no SSN/phone
+candidate. Card-shaped windows (``4-4-4-4``, ``4-6-5``, ``4-4-4-4-3`` or one unbroken
+group) are preferred, then 16 digits, then 15, then leftmost; the best is taken and the
+rest of the run is searched again, so a stray group or CVV beside a card does not join it.
+When an equally good window overlaps a chosen one and covers digits nothing else claimed (a
+4-digit group beside a 4-4-4-4 card can make both readings valid), the text cannot say
+which is the card, so their union is redacted, erring toward privacy. A run with no card
+that is shaped like one number (13-19 unbroken digits, or card-style groups) is protected,
+so a 16-digit reference number is never half-redacted as phones. The SSN/phone candidates
+then claim what cards and protected runs left. Each pass runs on a working copy where
+claimed spans are masked out, so offsets stay aligned with the original text. Every
+quantifier is bounded.
 
 Then spoken numbers, over the text with the written values masked, so a written value is
 never changed by them. Each spoken run (number words and the plain digit groups left, see
@@ -78,6 +83,8 @@ _DIGIT_GROUP = re.compile(r"[0-9]{1,64}")
 # What may join two groups of a card candidate run.
 _GROUP_SEPARATORS = frozenset({" ", "-", "-" + _JOIN})
 _CARD_MIN, _CARD_MAX = 13, 19
+# A run holding an unbroken group of this many digits or more is redacted whole as a card.
+_LONG_RUN = 20
 # A spoken run (or an uncovered stretch of one) is a value of its own with this many
 # digits, this many of them from number words; a run kept that holds this many number-word
 # digits is absorbed into a written value next to it.
@@ -345,7 +352,16 @@ def _digit_spans(view: str, joins: Sequence[int]) -> list[_Span]:
     candidates = _digit_candidates(view, joins)
     accept = _window_check(candidates)
     blocked: list[tuple[int, int]] = []
+    runs: list[list[tuple[int, int]]] = []
     for run in _digit_runs(view):
+        # A run holding an unbroken group of 20+ digits (an ASR repetition loop over a card)
+        # is one card whole, with every group joined to that group.
+        if any(end - start >= _LONG_RUN for start, end in run):
+            found.append((run[0][0], run[-1][1], CARD))
+            blocked.append((run[0][0], run[-1][1]))
+        else:
+            runs.append(run)
+    for run in runs:
         if run[-1][1] - run[0][0] < _CARD_MIN:
             continue  # Fewer than 13 digits: no card, and not shaped like one number.
         cards = _choose_cards(_card_windows(view, run, accept), len(run))

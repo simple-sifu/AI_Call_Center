@@ -160,6 +160,38 @@ def test_hyphenated_stray_group_glued_to_a_card_is_a_known_gap():
     assert redact("x 034-6536 329989 72483 ok") == ("x [PHONE] 329989 72483 ok", _counts(PHONE=1))
 
 
+@pytest.mark.parametrize(
+    ("text", "expected", "counts"),
+    [
+        # The tiny model's looped output for a card read aloud.
+        ("my card number is " + "4" + "1" * 400, "my card number is [CARD]", _counts(CARD=1)),
+        ("my card number is 4" + " one" * 400, "my card number is [CARD]", _counts(CARD=1)),
+        ("the reference is 12345678901234567890.", "the reference is [CARD].", _counts(CARD=1)),
+        ("ref 4539 12345678901234567890 ok", "ref [CARD] ok", _counts(CARD=1)),
+        ("x 123-45-6789 " + "7" * 25 + " y", "x [CARD] y", _counts(CARD=1)),
+        ("x 123-45-6789, " + "7" * 25 + " y", "x [SSN], [CARD] y", _counts(SSN=1, CARD=1)),
+        # A loop that starts partway into a card hides the whole card.
+        ("my card is 4539 1488 0343 6" + "4" * 30, "my card is [CARD]", _counts(CARD=1)),
+        ("4539-1488-0343-64" + "6" * 30, "[CARD]", _counts(CARD=1)),
+        ("4" * 30 + " 4539 1488 ok", "[CARD] ok", _counts(CARD=1)),
+        # 19 digits or fewer: as before (protected when not Luhn-valid, a card when it is).
+        ("the reference is 1234567890123456789.", "the reference is 1234567890123456789.", ZERO),
+        ("ref 4539148803436460003 ok", "ref [CARD] ok", _counts(CARD=1)),
+    ],
+)
+def test_unbroken_run_of_twenty_or_more_digits_is_a_card(text, expected, counts):
+    assert redact(text) == (expected, counts)
+
+
+def test_long_digit_run_split_across_segments():
+    texts, counts = redact_segments(["card 4" + "1" * 30, "1" * 30 + " thanks"])
+    assert texts == ["card [CARD]", " thanks"]
+    assert counts == _counts(CARD=1)
+    texts, counts = redact_segments(["card 4539 1488", "0343 6" + "4" * 30 + " ok"])
+    assert texts == ["card [CARD]", " ok"]
+    assert counts == _counts(CARD=1)
+
+
 def test_adjacent_cards_keep_two_labels():
     text = "cards 4111 1111 1111 1111 5555 5555 5555 4444"
     assert redact(text) == ("cards [CARD] [CARD]", _counts(CARD=2))
@@ -370,7 +402,7 @@ def test_card_with_cvv_in_next_segment():
         "1234-5678",
         "a 22345678901 b",
         "a 123456789012 b",
-        "a 12345678901234567890 b",
+        "a 1234567890123456789 b",
         "x123-45-67890",
         "0123-45-6789",
         "5555-123-4567",

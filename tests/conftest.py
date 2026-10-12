@@ -4,6 +4,9 @@ from pathlib import Path
 
 import pytest
 
+# The LLM-stage guard fixture, for tests in every folder.
+from security.llm_guard import llm_guard  # noqa: F401
+
 _MARKERS = ("unit", "integration", "security")
 _TESTS_ROOT = Path(__file__).parent
 
