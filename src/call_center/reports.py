@@ -77,17 +77,13 @@ def write_pdf(report: CallReport, path: Path) -> Path:
     story.append(Paragraph(f"<b>Source:</b> {_p(report.source_file)}", styles["Normal"]))
     story.append(Paragraph(f"<b>Status:</b> {_p(report.status)}", styles["Normal"]))
     if report.status_reason:
-        story.append(
-            Paragraph(f"<b>Reason:</b> {_p(report.status_reason)}", styles["Normal"])
-        )
+        story.append(Paragraph(f"<b>Reason:</b> {_p(report.status_reason)}", styles["Normal"]))
     story.append(Spacer(1, 12))
 
     if report.summary is not None:
         story.append(Paragraph("Summary", styles["Heading2"]))
         story.append(
-            Paragraph(
-                f"<b>Purpose:</b> {_p(report.summary.call_purpose)}", styles["Normal"]
-            )
+            Paragraph(f"<b>Purpose:</b> {_p(report.summary.call_purpose)}", styles["Normal"])
         )
         if report.summary.action_items:
             items = "; ".join(report.summary.action_items)
@@ -104,9 +100,7 @@ def write_pdf(report: CallReport, path: Path) -> Path:
 
     if report.qa_scores is not None:
         story.append(Paragraph("QA scores", styles["Heading2"]))
-        story.append(
-            Paragraph(f"<b>Overall:</b> {report.qa_scores.overall}", styles["Normal"])
-        )
+        story.append(Paragraph(f"<b>Overall:</b> {report.qa_scores.overall}", styles["Normal"]))
         for name in (
             "professionalism",
             "empathy",
@@ -117,8 +111,7 @@ def write_pdf(report: CallReport, path: Path) -> Path:
             dimension = getattr(report.qa_scores, name)
             story.append(
                 Paragraph(
-                    f"<b>{_p(name.title())}:</b> {dimension.score} — "
-                    f"{_p(dimension.rationale)}",
+                    f"<b>{_p(name.title())}:</b> {dimension.score} — {_p(dimension.rationale)}",
                     styles["Normal"],
                 )
             )
