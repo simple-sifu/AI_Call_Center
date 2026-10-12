@@ -1229,6 +1229,9 @@ def test_spoken_text_scans_quickly():
     assert time.perf_counter() - start < 0.5
     assert "four one one one" not in redacted
     assert counts["CARD"] > 0 and counts["SSN"] > 0 and counts["PHONE"] > 0
+    # Degenerate inputs guard against super-linear blowup, not raw speed: tens of thousands
+    # of one-digit groups in a single run take ~0.35 s locally and longer on a shared CI
+    # runner, while anything quadratic would take minutes.
     for bad in (
         "one " * 50_000,
         "1 one 2 two " * 15_000,
@@ -1242,7 +1245,7 @@ def test_spoken_text_scans_quickly():
     ):
         start = time.perf_counter()
         redact(bad)
-        assert time.perf_counter() - start < 0.5, bad[:12]
+        assert time.perf_counter() - start < 2.0, bad[:12]
 
 
 def test_many_segments_with_number_words_only_at_the_ends_scan_quickly():
