@@ -5,9 +5,13 @@ Reports include the redacted transcript and analysis results only, never the raw
 """
 
 import json
+from html import escape
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from call_center.models import AuditEvent, QAScores, RunStatus, Summary, Transcript
 from call_center.state import PipelineState
@@ -56,4 +60,74 @@ def write_json(report: CallReport, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = report.model_dump(mode="json")
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _p(text: str) -> str:
+    return escape(text, quote=False)
+
+
+def write_pdf(report: CallReport, path: Path) -> Path:
+    """Write a human-readable PDF with the same facts as the JSON report."""
+    path = path.resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    styles = getSampleStyleSheet()
+    story: list = [Paragraph("Call analysis report", styles["Title"]), Spacer(1, 12)]
+
+    story.append(Paragraph(f"<b>Source:</b> {_p(report.source_file)}", styles["Normal"]))
+    story.append(Paragraph(f"<b>Status:</b> {_p(report.status)}", styles["Normal"]))
+    if report.status_reason:
+        story.append(
+            Paragraph(f"<b>Reason:</b> {_p(report.status_reason)}", styles["Normal"])
+        )
+    story.append(Spacer(1, 12))
+
+    if report.summary is not None:
+        story.append(Paragraph("Summary", styles["Heading2"]))
+        story.append(
+            Paragraph(
+                f"<b>Purpose:</b> {_p(report.summary.call_purpose)}", styles["Normal"]
+            )
+        )
+        if report.summary.action_items:
+            items = "; ".join(report.summary.action_items)
+            story.append(Paragraph(f"<b>Action items:</b> {_p(items)}", styles["Normal"]))
+        traj = report.summary.sentiment_trajectory
+        story.append(
+            Paragraph(
+                f"<b>Sentiment:</b> opening {_p(traj.opening)}, middle {_p(traj.middle)}, "
+                f"closing {_p(traj.closing)}",
+                styles["Normal"],
+            )
+        )
+        story.append(Spacer(1, 12))
+
+    if report.qa_scores is not None:
+        story.append(Paragraph("QA scores", styles["Heading2"]))
+        story.append(
+            Paragraph(f"<b>Overall:</b> {report.qa_scores.overall}", styles["Normal"])
+        )
+        for name in (
+            "professionalism",
+            "empathy",
+            "resolution",
+            "compliance",
+            "clarity",
+        ):
+            dimension = getattr(report.qa_scores, name)
+            story.append(
+                Paragraph(
+                    f"<b>{_p(name.title())}:</b> {dimension.score} — "
+                    f"{_p(dimension.rationale)}",
+                    styles["Normal"],
+                )
+            )
+        story.append(Spacer(1, 12))
+
+    story.append(Paragraph("Audit trail", styles["Heading2"]))
+    for event in report.audit:
+        line = f"{_p(event.stage)} ({_p(event.outcome)}): {_p(event.detail)}"
+        story.append(Paragraph(line, styles["Normal"]))
+
+    SimpleDocTemplate(str(path), pagesize=letter).build(story)
     return path

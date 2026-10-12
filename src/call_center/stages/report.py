@@ -1,11 +1,11 @@
-"""Report stage: JSON report from final pipeline state, always runs."""
+"""Report stage: JSON and PDF reports from final pipeline state, always runs."""
 
 import os
 from pathlib import Path
 
 from call_center.models import AuditEvent
 from call_center.persistence import llm_provider_from_env, persist_call_report
-from call_center.reports import CallReport, build_report, write_json
+from call_center.reports import CallReport, build_report, write_json, write_pdf
 from call_center.state import PipelineState
 
 NAME = "report"
@@ -21,8 +21,10 @@ def _output_dir(state: PipelineState) -> Path:
 
 def run(state: PipelineState) -> dict:
     stem = Path(state["source_file"]).stem
-    json_path = _output_dir(state) / f"{stem}.json"
-    detail = f"wrote {json_path.resolve()}"
+    out_dir = _output_dir(state)
+    json_path = out_dir / f"{stem}.json"
+    pdf_path = out_dir / f"{stem}.pdf"
+    detail = f"wrote {json_path.resolve()} and {pdf_path.resolve()}"
     report_event = AuditEvent(stage=NAME, outcome="ok", detail=detail)
 
     base = build_report(state)
@@ -36,12 +38,16 @@ def run(state: PipelineState) -> dict:
         summary=base.summary,
         qa_scores=base.qa_scores,
     )
-    written = write_json(report, json_path)
-    persist_call_report(report, report_json_path=str(written), llm_provider=llm_provider_from_env())
+    json_written = write_json(report, json_path)
+    pdf_written = write_pdf(report, pdf_path)
+    persist_call_report(
+        report, report_json_path=str(json_written), llm_provider=llm_provider_from_env()
+    )
 
     update: dict = {
         "stages_completed": [NAME],
-        "report_json_path": str(written),
+        "report_json_path": str(json_written),
+        "report_pdf_path": str(pdf_written),
         "audit": [report_event],
     }
     if state.get("status", "running") == "running":
