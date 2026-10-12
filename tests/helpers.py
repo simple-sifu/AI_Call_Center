@@ -103,6 +103,50 @@ FAKE_QA_SCORES = {
 # What the fake answers, by the name of the schema it was asked for.
 FAKE_ANSWERS = {"Summary": FAKE_SUMMARY, "QAScores": FAKE_QA_SCORES}
 
+# Card digits used in persistence tests to prove raw ASR text is not stored.
+SAMPLE_RAW_CARD = "4539148803436467"
+
+
+def sample_persist_report(source_file: str = "/calls/sample.wav"):
+    """A completed ``CallReport`` with fake summary/scores for DB unit tests."""
+    from call_center.models import AuditEvent, QAScores, Summary, Transcript, TranscriptSegment
+    from call_center.reports import REPORT_STAGE, CallReport, build_report
+
+    redacted = Transcript(
+        segments=[TranscriptSegment(speaker="agent", start=0, end=1, text="Hi")],
+        audio_sha256="c" * 64,
+    )
+    state = {
+        "source_file": source_file,
+        "stages_completed": ["intake"],
+        "transcript": Transcript(
+            segments=[TranscriptSegment(speaker="c", start=0, end=1, text=SAMPLE_RAW_CARD)],
+            audio_sha256="d" * 64,
+        ),
+        "redacted_transcript": redacted,
+        "summary": Summary.model_validate(FAKE_SUMMARY),
+        "qa_scores": QAScores.model_validate(FAKE_QA_SCORES),
+        "audit": [AuditEvent(stage="intake", outcome="ok")],
+        "status": "running",
+        "status_reason": None,
+        "report_output_dir": None,
+        "report_json_path": None,
+        "report_pdf_path": None,
+    }
+    base = build_report(state)
+    event = AuditEvent(stage=REPORT_STAGE, outcome="ok", detail="wrote /tmp/x.json")
+    return CallReport(
+        source_file=base.source_file,
+        status="completed",
+        status_reason=base.status_reason,
+        stages_completed=(*base.stages_completed, REPORT_STAGE),
+        audit=(*base.audit, event),
+        redacted_transcript=base.redacted_transcript,
+        summary=base.summary,
+        qa_scores=base.qa_scores,
+    )
+
+
 # ``FakeChatModel.output`` default: answer each call by the schema it was asked for.
 BY_SCHEMA = object()
 

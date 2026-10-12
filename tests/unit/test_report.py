@@ -7,7 +7,16 @@ from helpers import FAKE_QA_SCORES, FAKE_SUMMARY
 from pypdf import PdfReader
 
 from call_center.models import AuditEvent, QAScores, Summary, Transcript, TranscriptSegment
-from call_center.reports import CallReport, build_report, write_json, write_pdf
+from call_center.reports import (
+    REPORT_STAGE,
+    CallReport,
+    artifact_paths,
+    build_report,
+    finalized_report,
+    report_output_dir,
+    write_json,
+    write_pdf,
+)
 from call_center.stages import report as report_stage
 from call_center.state import PipelineState
 
@@ -136,3 +145,25 @@ def test_write_json_creates_parent_dirs(tmp_path):
     path = tmp_path / "nested" / "dir" / "call.json"
     write_json(build_report(_state(status="blocked", status_reason="x")), path)
     assert path.is_file()
+
+
+def test_report_output_dir_prefers_state_then_env(monkeypatch, tmp_path):
+    state_dir = tmp_path / "from-state"
+    assert report_output_dir(_state(report_output_dir=str(state_dir))) == state_dir
+    monkeypatch.setenv("REPORT_OUTPUT_DIR", str(tmp_path / "from-env"))
+    assert report_output_dir(_state(report_output_dir=None)) == tmp_path / "from-env"
+
+
+def test_artifact_paths_under_output_dir(tmp_path):
+    out = tmp_path / "out"
+    json_path, pdf_path = artifact_paths(_state(report_output_dir=str(out)))
+    assert json_path == out / "sample.json"
+    assert pdf_path == out / "sample.pdf"
+
+
+def test_finalized_report_includes_report_stage():
+    event = AuditEvent(stage=REPORT_STAGE, outcome="ok", detail="wrote paths")
+    report = finalized_report(_state(), event)
+    assert report.stages_completed[-1] == REPORT_STAGE
+    assert report.audit[-1] == event
+    assert report.summary is not None
