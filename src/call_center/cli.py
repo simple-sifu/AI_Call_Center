@@ -7,8 +7,8 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from call_center.config import format_config_error, load_settings
-from call_center.graph import run_pipeline
 from call_center.gradio_app import launch as launch_ui
+from call_center.graph import run_pipeline
 from call_center.tracing import configure_tracing, flush_traces
 
 
