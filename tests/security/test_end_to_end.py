@@ -8,7 +8,8 @@ import re
 from pathlib import Path
 
 import pytest
-from security.llm_guard import LLMGuard, card_digit_leaks
+from helpers import FakeTranscriber
+from security.llm_guard import LLMGuard, card_digit_leaks, transcript_text
 
 from call_center import asr
 from call_center.graph import run_pipeline
@@ -30,10 +31,6 @@ def _digits(text: str) -> str:
     return re.sub(r"\D", "", text)
 
 
-def _text(transcript) -> str:
-    return " ".join(segment.text for segment in transcript.segments)
-
-
 @pytest.fixture
 def tiny(monkeypatch):
     monkeypatch.setenv("WHISPER_MODEL_SIZE", "tiny")
@@ -43,7 +40,7 @@ def tiny(monkeypatch):
 def test_injection_call_is_blocked_before_any_llm_stage(tiny, llm_guard):
     state = run_pipeline(str(CALL_INJECTION))
 
-    assert state["status"] == "blocked", _text(state["transcript"])
+    assert state["status"] == "blocked", transcript_text(state["transcript"])
     assert "INJ-01" in state["status_reason"]
     assert state["stages_completed"] == BLOCKED_STAGES
     assert state["redacted_transcript"] is None
@@ -58,8 +55,9 @@ def test_card_call_reaches_llm_stages_redacted(tiny, llm_guard):
 
     assert state["status"] == "completed", state["status_reason"]
     # The ASR heard the card, so the redaction below is tested on it.
-    assert CARD in _digits(_text(state["transcript"])), _text(state["transcript"])
-    redacted = _text(state["redacted_transcript"])
+    raw = transcript_text(state["transcript"])
+    assert CARD in _digits(raw), raw
+    redacted = transcript_text(state["redacted_transcript"])
     assert "[CARD]" in redacted
     for group in CARD_GROUPS:
         assert group not in redacted
@@ -76,9 +74,9 @@ def test_dictation_call_reaches_llm_stages_without_card_digits(tiny, llm_guard):
     state = run_pipeline(str(CALL_DICTATION))
 
     assert state["status"] == "completed", state["status_reason"]
-    raw = _text(state["transcript"])
+    raw = transcript_text(state["transcript"])
     assert CARD in _digits(raw), raw
-    redacted = _text(state["redacted_transcript"])
+    redacted = transcript_text(state["redacted_transcript"])
     assert "[CARD]" in redacted
     assert not card_digit_leaks(redacted, CARD), redacted
     audit = " ".join(e.model_dump_json() for e in state["audit"])
@@ -93,9 +91,9 @@ def test_dictation_call_reaches_llm_stages_without_ssn_digits(tiny, llm_guard):
     state = run_pipeline(str(CALL_DICTATION))
 
     assert state["status"] == "completed", state["status_reason"]
-    raw = _text(state["transcript"])
+    raw = transcript_text(state["transcript"])
     assert SSN in _digits(raw), raw
-    redacted = _text(state["redacted_transcript"])
+    redacted = transcript_text(state["redacted_transcript"])
     assert "[SSN]" in redacted and "[CARD]" in redacted, redacted
     # No stretch of 3 or more digits in order, as digits or number words, of the SSN or
     # of any card group survives (a partial leak such as "1-2-3 [SSN]" fails here).
@@ -138,14 +136,9 @@ CARD_SEGMENTS = [
 ]
 
 
-class _Fake:
-    def transcribe(self, path):
-        return CARD_SEGMENTS
-
-
 @pytest.fixture
 def card_asr(monkeypatch):
-    monkeypatch.setattr(asr, "get_transcriber", lambda model_size: _Fake())
+    monkeypatch.setattr(asr, "get_transcriber", lambda model_size: FakeTranscriber(CARD_SEGMENTS))
 
 
 def test_guard_passes_redacted_card_call(card_asr, llm_guard):

@@ -163,8 +163,6 @@ _DICTATION_TOKEN = re.compile(
     r")"
 )
 _DATE_SEPARATOR = re.compile(r"[-./]")
-# Digits continuing a ``long`` stretch past 64.
-_MORE_DIGITS = re.compile(r"[0-9]{1,64}")
 # What may join two groups of a dictated run, at most this many characters (not counting
 # segment join spaces).
 _DICTATION_SEPARATORS = frozenset(",.-() \t\n\r\f\v")
@@ -602,7 +600,8 @@ def _dictated_pass(work: str, joins: Sequence[int]) -> list[_Span]:
         start, end = m.span()
         name = m.lastgroup
         if name == "long":
-            while (more := _MORE_DIGITS.match(work, end)) is not None:
+            # Digits continuing a ``long`` stretch past 64.
+            while (more := _DIGIT_GROUP.match(work, end)) is not None:
                 end = more.end()
         if name in ("group", "long", "date") and spoken_numbers.glued(work, start, end):
             feed(start, end, "other")
@@ -634,8 +633,8 @@ def _find(text: str, joins: Sequence[int] = ()) -> list[_Span]:
     found.extend(written)
     found.extend(spoken)
     out = _disjoint(text, sorted(found))
-    # Dictated digits last, over the text with every value so far and every run 3.3 keeps
-    # as one number masked, so they never change one.
+    # Dictated digits last, over the text with every value so far and every run
+    # ``_digit_spans`` protects as one number masked, so they never change one.
     masked = [(start, end) for start, end, _ in out] + protected
     dictated = _dictated_pass(_mask(work, masked), joins)
     return _disjoint(text, sorted(out + dictated)) if dictated else out

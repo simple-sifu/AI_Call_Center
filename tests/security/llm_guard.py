@@ -106,7 +106,7 @@ def card_digit_leaks(text: str, card: str, run: int = 4) -> list[str]:
     return sorted({p for chunk in chunks for p in pieces if p in chunk})
 
 
-def _text(transcript: Transcript) -> str:
+def transcript_text(transcript: Transcript) -> str:
     return " ".join(segment.text for segment in transcript.segments)
 
 
@@ -146,8 +146,8 @@ class LLMGuard:
             [redacted] = received
             assert isinstance(redacted, Transcript), f"{name} got no redacted transcript"
             for value in values:
-                leaks = card_digit_leaks(_text(redacted), value)
-                assert not leaks, f"{name} got card digits {leaks}: {_text(redacted)!r}"
+                leaks = card_digit_leaks(transcript_text(redacted), value)
+                assert not leaks, f"{name} got card digits {leaks}: {transcript_text(redacted)!r}"
 
     def assert_not_run(self) -> None:
         ran = {name: len(calls) for name, calls in self.received.items() if calls}

@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 import pytest
+from helpers import DIGIT_WORDS, FakeTranscriber
 
 from call_center import asr
 from call_center.graph import run_pipeline
@@ -16,16 +17,8 @@ SEEDED = {
 }
 
 
-class _Fake:
-    def __init__(self, segments):
-        self.segments = list(segments)
-
-    def transcribe(self, path):
-        return self.segments
-
-
 def test_seeded_values_never_reach_redacted_transcript_or_audit(monkeypatch, llm_guard):
-    monkeypatch.setattr(asr, "get_transcriber", lambda model_size: _Fake(SEEDED.values()))
+    monkeypatch.setattr(asr, "get_transcriber", lambda model_size: FakeTranscriber(SEEDED.values()))
     state = run_pipeline(str(CALL_MONO))
     llm_guard.assert_redacted_only("4111111111111111")
 
@@ -51,17 +44,10 @@ SPOKEN = [
     asr.RawSegment(2.0, 3.0, "six seven eight nine. Call eight five five oh one nine nine."),
     asr.RawSegment(3.0, 4.0, "Thanks. One moment, I have two options."),
 ]
-# Every number word the spoken pass reads, so none of the values' words can hide.
-DIGIT_WORDS = {
-    *("zero", "oh", "o", "one", "two", "three", "four", "five", "six", "seven", "eight"),
-    *("nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen"),
-    *("seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty", "fifty", "sixty"),
-    *("seventy", "eighty", "ninety", "hundred", "double", "triple"),
-}
 
 
 def test_spoken_values_never_reach_redacted_transcript(monkeypatch, llm_guard):
-    monkeypatch.setattr(asr, "get_transcriber", lambda model_size: _Fake(SPOKEN))
+    monkeypatch.setattr(asr, "get_transcriber", lambda model_size: FakeTranscriber(SPOKEN))
     state = run_pipeline(str(CALL_MONO))
     llm_guard.assert_redacted_only("4111111111111111")
 
