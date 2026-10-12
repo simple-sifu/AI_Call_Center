@@ -222,7 +222,7 @@ def _punctuation_gap(gap: str) -> bool:
     return all(len(space) <= _MAX_INNER_SPACE for space in re.split(r"[^\s]", core))
 
 
-def _glued(text: str, start: int, end: int) -> bool:
+def glued(text: str, start: int, end: int) -> bool:
     """True when the written group ``text[start:end]`` touches a letter on either side."""
     before = text[start - 1] if start else ""
     after = text[end] if end < len(text) else ""
@@ -278,8 +278,7 @@ def find_runs(text: str, joins: Sequence[int] = ()) -> list[Run]:
     for m in TOKEN.finditer(text):
         name = m.lastgroup
         if name == "other" or (
-            name == "written"
-            and (_glued(text, *m.span()) or _DECIMAL.search(m.group()) is not None)
+            name == "written" and (glued(text, *m.span()) or _DECIMAL.search(m.group()) is not None)
         ):
             # Written digits that are not a plain group end the run like an ordinary word.
             drop_written_stretch(m.start())

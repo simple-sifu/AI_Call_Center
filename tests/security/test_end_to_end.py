@@ -19,6 +19,8 @@ FIXTURES = Path(__file__).parent.parent / "fixtures"
 CALL_INJECTION = FIXTURES / "call_injection.wav"
 CALL_CARD = FIXTURES / "call_card.wav"
 CALL_MONO = FIXTURES / "call_mono.wav"
+CALL_DICTATION = FIXTURES / "call_dictation.wav"
+SSN = "123456789"
 CARD = "4539148803436467"
 CARD_GROUPS = ("4539", "1488", "0343", "6467")
 BLOCKED_STAGES = ["intake", "transcription", "injection_detection", "report"]
@@ -67,6 +69,41 @@ def test_card_call_reaches_llm_stages_redacted(tiny, llm_guard):
     audit = " ".join(e.model_dump_json() for e in state["audit"])
     assert not card_digit_leaks(audit, CARD)
     llm_guard.assert_redacted_only(CARD)
+
+
+@pytest.mark.slow
+def test_dictation_call_reaches_llm_stages_without_card_digits(tiny, llm_guard):
+    state = run_pipeline(str(CALL_DICTATION))
+
+    assert state["status"] == "completed", state["status_reason"]
+    raw = _text(state["transcript"])
+    assert CARD in _digits(raw), raw
+    redacted = _text(state["redacted_transcript"])
+    assert "[CARD]" in redacted
+    assert not card_digit_leaks(redacted, CARD), redacted
+    audit = " ".join(e.model_dump_json() for e in state["audit"])
+    assert not card_digit_leaks(audit, CARD)
+    llm_guard.assert_redacted_only(CARD)
+
+
+@pytest.mark.slow
+def test_dictation_call_reaches_llm_stages_without_ssn_digits(tiny, llm_guard):
+    # The tiny model writes the SSN as hyphen fragments across segments ("1-2-3" +
+    # "4-5-6-7-8-9"), which only the dictated pass redacts.
+    state = run_pipeline(str(CALL_DICTATION))
+
+    assert state["status"] == "completed", state["status_reason"]
+    raw = _text(state["transcript"])
+    assert SSN in _digits(raw), raw
+    redacted = _text(state["redacted_transcript"])
+    assert "[SSN]" in redacted and "[CARD]" in redacted, redacted
+    # No stretch of 3 or more digits in order, as digits or number words, of the SSN or
+    # of any card group survives (a partial leak such as "1-2-3 [SSN]" fails here).
+    for value in (SSN, *CARD_GROUPS):
+        assert not card_digit_leaks(redacted, value, run=3), (value, redacted)
+    [event] = [e for e in state["audit"] if e.stage == "pii_redaction"]
+    assert (event.outcome, event.detail) == ("ok", "redacted SSN 1, CARD 1, EMAIL 0, PHONE 0")
+    llm_guard.assert_redacted_only(CARD, SSN)
 
 
 @pytest.mark.slow

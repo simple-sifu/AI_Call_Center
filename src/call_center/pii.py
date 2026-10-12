@@ -40,6 +40,24 @@ digits from number words, directly next to a written value (only a separator bet
 absorbed into that value's placeholder (``five five five 123-4567``). Text without number
 words is untouched by this pass.
 
+Last, dictated digits, over the text with every value above masked, and every run kept
+above as shaped like one number masked too (a Luhn-failing ``4111 1111 1111 1112``), so no
+earlier result changes. ASR often writes digits read aloud as short groups split by
+commas, dots, parentheses, spaces or hyphen fragments (``4-5-39, 1-48-8, ...``, ``4.539,
+1.488, ...``, ``1-2-3-4-5-6-7-8-9``). A dictated run is a maximal sequence of 2 or more
+plain groups of 1-4 digits, two groups joined by up to 3 characters from ``,`` ``.`` ``-``
+``(`` ``)`` and whitespace (segment join spaces not counted). Not plain, and ending a run:
+an amount marked by a currency sign (``$19.99``), a time (``10:30``), a date with a 4-digit
+year (``2024-01-15``, ``1-15-1980``, ``1/15/2024``, ``1.15.2024``; month 1-12, day 1-31),
+a comma-thousands number (``1,250,000``) and digits glued to a letter. Other date-like
+shapes (``4-5-39``) and bare decimals (``6467.5``) are ordinary groups. A run holding 7 or
+more digits is redacted whole and labelled by its digit count like a spoken value, without
+a Luhn check. Runs and stretches of 5 or more digits joined end to end by run separators
+form a chain; when any run in it qualifies, the whole chain is one placeholder, labelled
+and counted once by all its digits, so a number is never cut. A placeholder takes an
+opening parenthesis as above. An accepted cost is that a list of short numbers with 7 or more
+digits in all is redacted too (``rooms 101, 102, 103``, ``rates 1.25, 2.50, 3.75``).
+
 Text from several segments is joined with a space, and the join space is always kept. At a
 join only, a hyphen next to the join space (``123-45-`` + ``6789`` or ``123-45`` +
 ``-6789``) also counts as one separator: the working copy holds the hyphen then a marker
@@ -128,6 +146,30 @@ _DIGIT_PASSES: tuple[tuple[str, re.Pattern[str]], ...] = (
     (PHONE, _PHONE),
 )
 
+# Dictated digits: one token of the text the earlier passes left. Not plain: an amount
+# marked by a currency sign, a time, a date shape with a 4-digit year (``_valid_date``
+# decides; an invalid one is read as its groups), or a comma-thousands number. Plain: a
+# group of 1-4 digits. ``long`` is a stretch of 5 or more digits, which ends a run but is
+# covered by a redacted run it is joined to.
+_DICTATION_TOKEN = re.compile(
+    r"(?=[0-9$€£¥])(?:"
+    r"(?P<amount>[$€£¥]\s?[0-9]{1,32}(?:,[0-9]{3}){0,8}(?:\.[0-9]{1,2})?(?![0-9]))"
+    r"|(?P<time>(?<![0-9])[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?(?![0-9]))"
+    r"|(?P<date>(?<![0-9])(?:[0-9]{4}[-./][0-9]{1,2}[-./][0-9]{1,2}"
+    r"|[0-9]{1,2}[-./][0-9]{1,2}[-./][0-9]{4})(?![0-9]))"
+    r"|(?P<thousands>(?<![0-9])(?<![0-9][.,])[0-9]{1,3}(?:,[0-9]{3}){1,8}(?![0-9]|,[0-9]))"
+    r"|(?P<group>(?<![0-9])[0-9]{1,4}(?![0-9]))"
+    r"|(?P<long>(?<![0-9])[0-9]{5,64})"
+    r")"
+)
+_DATE_SEPARATOR = re.compile(r"[-./]")
+# Digits continuing a ``long`` stretch past 64.
+_MORE_DIGITS = re.compile(r"[0-9]{1,64}")
+# What may join two groups of a dictated run, at most this many characters (not counting
+# segment join spaces).
+_DICTATION_SEPARATORS = frozenset(",.-() \t\n\r\f\v")
+_DICTATION_GAP = 3
+
 # (start, end, type) in the joined text.
 _Span = tuple[int, int, str]
 
@@ -150,9 +192,11 @@ def luhn_valid(digits: str) -> bool:
 def _mask(text: str, spans: Sequence[tuple[int, int]]) -> str:
     parts, pos = [], 0
     for start, end in sorted(spans):
-        parts.append(text[pos:start])
-        parts.append(_MASK * (end - start))
-        pos = end
+        start = max(start, pos)  # Spans may overlap.
+        if start < end:
+            parts.append(text[pos:start])
+            parts.append(_MASK * (end - start))
+            pos = end
     parts.append(text[pos:])
     return "".join(parts)
 
@@ -345,9 +389,12 @@ def _window_check(candidates: Sequence[_Span]) -> Callable[[int, int], bool]:
     return accept
 
 
-def _digit_spans(view: str, joins: Sequence[int]) -> list[_Span]:
+def _digit_spans(
+    view: str, joins: Sequence[int], protected: list[tuple[int, int]] | None = None
+) -> list[_Span]:
     """SSN, card and phone spans in ``view`` (a working copy with joins marked), sorted by
-    start. ``joins`` are the offsets of the spaces that join segments."""
+    start. ``joins`` are the offsets of the spaces that join segments. The runs kept as
+    shaped like one number are appended to ``protected`` when it is given."""
     found: list[_Span] = []
     candidates = _digit_candidates(view, joins)
     accept = _window_check(candidates)
@@ -370,6 +417,8 @@ def _digit_spans(view: str, joins: Sequence[int]) -> list[_Span]:
             blocked.append((run[i][0], run[j][1]))
         if not cards and _is_one_number(run):
             blocked.append((run[0][0], run[-1][1]))
+            if protected is not None:
+                protected.append((run[0][0], run[-1][1]))
     # Candidates claim what cards and protected runs left. Both lists are sorted and
     # disjoint, so one forward sweep finds the overlaps.
     blocked.sort()
@@ -384,7 +433,7 @@ def _digit_spans(view: str, joins: Sequence[int]) -> list[_Span]:
     return found
 
 
-def _spoken_kind(digits: int) -> str:
+def _kind_by_digits(digits: int) -> str:
     return SSN if digits == 9 else CARD if digits >= 12 else PHONE
 
 
@@ -451,7 +500,7 @@ def _spoken_pass(
         for first, last, count in values:
             lo, hi = index_map[first], index_map[last]
             assert lo is not None and hi is not None
-            spans.append((lo[0], hi[1], _spoken_kind(count)))
+            spans.append((lo[0], hi[1], _kind_by_digits(count)))
         if values or sum(spoken[i] for i in digits) < _SPOKEN_WORD_DIGITS:
             continue
         # A kept run directly next to a written value (only a separator between) joins
@@ -491,6 +540,83 @@ def _open_paren(text: str, start: int, end: int) -> int:
     return i if i >= 0 and text[i] == "(" else start
 
 
+def _dictation_gap(work: str, lo: int, hi: int, joins: Sequence[int]) -> bool:
+    """True when ``work[lo:hi]`` joins two dictated tokens: 1 to ``_DICTATION_GAP``
+    separator characters, segment join spaces not counted."""
+    size = hi - lo
+    if size == 1:  # The common case, without slicing.
+        return work[lo] in _DICTATION_SEPARATORS
+    if size <= 0:
+        return False
+    if size > _DICTATION_GAP:
+        # Each join space is one character, so a longer gap cannot be a separator; this
+        # also keeps the check below bounded.
+        size -= bisect_left(joins, hi) - bisect_left(joins, lo)
+        if size > _DICTATION_GAP:
+            return False
+    return all(ch in _DICTATION_SEPARATORS for ch in work[lo:hi])
+
+
+def _valid_date(text: str) -> bool:
+    """True when a ``date`` token is a date: its year has 4 digits, its month is 1-12 and
+    its day 1-31 (day and month in either order when the year is last)."""
+    first, second, third = _DATE_SEPARATOR.split(text)
+    if len(first) == 4:
+        month, day = int(second), int(third)
+        return 1 <= month <= 12 and 1 <= day <= 31
+    a, b = int(first), int(second)
+    return min(a, b) >= 1 and ((a <= 12 and b <= 31) or (b <= 12 and a <= 31))
+
+
+def _dictated_pass(work: str, joins: Sequence[int]) -> list[_Span]:
+    """Dictated digit runs in ``work`` (the text with every earlier value masked). Runs and
+    5+ digit stretches joined end to end by run separators form a chain; when any run in
+    it holds 2 or more groups and ``_SPOKEN_VALUE_DIGITS`` or more digits, the whole chain
+    is one value, labelled by all its digits."""
+    spans: list[_Span] = []
+    chain: list[tuple[int, int, bool]] = []  # (start, end, is a 5+ digit stretch)
+    prev_end = 0
+
+    def close() -> None:
+        qualifies, groups, digits = False, 0, 0  # over the current run of groups
+        for start, end, is_long in chain:
+            if is_long:
+                groups = digits = 0
+            else:
+                groups, digits = groups + 1, digits + end - start
+                qualifies = qualifies or (groups >= 2 and digits >= _SPOKEN_VALUE_DIGITS)
+        if qualifies:
+            count = sum(end - start for start, end, _ in chain)
+            spans.append((chain[0][0], chain[-1][1], _kind_by_digits(count)))
+        chain.clear()
+
+    def feed(start: int, end: int, kind: str) -> None:
+        nonlocal prev_end
+        if chain and not (kind != "other" and _dictation_gap(work, prev_end, start, joins)):
+            close()
+        if kind != "other":
+            chain.append((start, end, kind == "long"))
+        prev_end = end
+
+    for m in _DICTATION_TOKEN.finditer(work):
+        start, end = m.span()
+        name = m.lastgroup
+        if name == "long":
+            while (more := _MORE_DIGITS.match(work, end)) is not None:
+                end = more.end()
+        if name in ("group", "long", "date") and spoken_numbers.glued(work, start, end):
+            feed(start, end, "other")
+        elif name == "date" and not _valid_date(m.group()):
+            for g in _DIGIT_GROUP.finditer(work, start, end):
+                feed(*g.span(), "group")
+        elif name in ("group", "long"):
+            feed(start, end, name)
+        else:
+            feed(start, end, "other")
+    close()
+    return spans
+
+
 def _find(text: str, joins: Sequence[int] = ()) -> list[_Span]:
     """Non-overlapping PII spans in ``text``, sorted by start. ``joins`` are the offsets of
     the spaces that join segments."""
@@ -501,16 +627,28 @@ def _find(text: str, joins: Sequence[int] = ()) -> list[_Span]:
         found.extend((start, end, kind) for start, end in new)
         work = _mask(work, new)
 
-    written = _digit_spans(_mark_joins(work, joins), joins)
+    protected: list[tuple[int, int]] = []
+    written = _digit_spans(_mark_joins(work, joins), joins, protected)
     work = _mask(work, [(start, end) for start, end, _ in written])
     written, spoken = _spoken_pass(text, work, joins, written)
     found.extend(written)
     found.extend(spoken)
-    found.sort()
-    # A word that reads as several digits (``twelve``) can feed two spoken values; the later
-    # one then starts after the earlier, so the spans stay disjoint. Only spoken tokens can
-    # be shared, so a written value is never cut. A span covering a closing parenthesis also
-    # covers its opening one when nothing else has claimed it.
+    out = _disjoint(text, sorted(found))
+    # Dictated digits last, over the text with every value so far and every run 3.3 keeps
+    # as one number masked, so they never change one.
+    masked = [(start, end) for start, end, _ in out] + protected
+    dictated = _dictated_pass(_mask(work, masked), joins)
+    return _disjoint(text, sorted(out + dictated)) if dictated else out
+
+
+def _disjoint(text: str, found: Sequence[_Span]) -> list[_Span]:
+    """``found`` (sorted by start) made disjoint, each span widened to an opening
+    parenthesis as ``_open_paren`` says.
+
+    A word that reads as several digits (``twelve``) can feed two spoken values; the later
+    one then starts after the earlier, so the spans stay disjoint. Only spoken tokens can
+    be shared, so a written value is never cut. A span covering a closing parenthesis also
+    covers its opening one when nothing else has claimed it."""
     out: list[_Span] = []
     for start, end, kind in found:
         prev_end = out[-1][1] if out else 0

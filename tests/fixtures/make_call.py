@@ -13,6 +13,12 @@ two channels under that name.
   the tiny model wrote "It's four five three nine, ..." as ``4539-1488-0343-6467``, but a
   bare "Four five three nine. One four ..." as ``4.539, 1.488, ...`` and a bare "Four five
   three nine, one ..." as ``4 5 3 9, 1 4 8 8, ...``, neither of which reads as a card.
+- dictation (``call_dictation.wav``): the customer reads the same card as bare groups
+  ("Four five three nine. One four eight eight. ...") and the SSN 123-45-6789 as "one two
+  three, four five, six seven eight nine". In this call the tiny model writes the card as
+  hyphen groups over four segments (``4-5-3-9`` / ``1-488`` / ``0-3-4-3`` / ``6-4-6-7``,
+  which 3.3 redacts as one card) and the SSN as hyphen fragments over two segments
+  (``1-2-3`` / ``4-5-6-7-8-9``, which only the dictated-digit pass of story 7 redacts).
 
 Output is 16 kHz, 16-bit PCM. Requires macOS; the committed WAVs make this optional.
 Usage: ``python tests/fixtures/make_call.py [--out DIR] [name ...]`` (default: every call
@@ -73,6 +79,21 @@ CALLS = {
                 "six four six seven.",
             ),
             ("agent", "Thank you, the payment has gone through."),
+        ],
+    ),
+    "dictation": Call(
+        "call_dictation.wav",
+        None,
+        [
+            ("agent", "Your card number?"),
+            (
+                "customer",
+                "Four five three nine. One four eight eight. Zero three four three. "
+                "Six four six seven.",
+            ),
+            ("agent", "And your social?"),
+            ("customer", "one two three, four five, six seven eight nine"),
+            ("agent", "Thanks."),
         ],
     ),
 }

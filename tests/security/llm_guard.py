@@ -137,16 +137,16 @@ class LLMGuard:
 
         return run
 
-    def assert_redacted_only(self, card: str | None = None) -> None:
+    def assert_redacted_only(self, *values: str) -> None:
         """Each LLM stage ran once, got a redacted transcript, never read the raw one, and
-        (with ``card``, digits only) got no 4-digit stretch of the card."""
+        got no 4-digit stretch of any of ``values`` (each digits only: a card, an SSN)."""
         assert not self.raw_reads, f"LLM stage read the raw transcript: {self.raw_reads}"
         for name, received in self.received.items():
             assert len(received) == 1, f"{name} ran {len(received)} times"
             [redacted] = received
             assert isinstance(redacted, Transcript), f"{name} got no redacted transcript"
-            if card is not None:
-                leaks = card_digit_leaks(_text(redacted), card)
+            for value in values:
+                leaks = card_digit_leaks(_text(redacted), value)
                 assert not leaks, f"{name} got card digits {leaks}: {_text(redacted)!r}"
 
     def assert_not_run(self) -> None:
