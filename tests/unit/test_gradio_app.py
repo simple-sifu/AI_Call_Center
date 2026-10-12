@@ -3,12 +3,15 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import gradio as gr
+import pytest
 from helpers import FAKE_QA_SCORES, FAKE_SUMMARY
 
 from call_center.config import Settings
 from call_center.gradio_app import (
     build_app,
     observability_rows,
+    resolve_upload_path,
     run_analyze,
     scores_markdown,
     status_markdown,
@@ -117,3 +120,14 @@ def test_run_analyze_blocked_shows_reason(monkeypatch, tmp_path):
 def test_build_app_returns_blocks():
     app = build_app(Settings(_env_file=None))
     assert app.__class__.__name__ == "Blocks"
+
+
+def test_resolve_upload_path(tmp_path):
+    wav = tmp_path / "call_mono.wav"
+    wav.write_bytes(b"x")
+    assert resolve_upload_path(str(wav)) == wav
+
+
+def test_resolve_upload_path_missing():
+    with pytest.raises(gr.Error, match="Upload a WAV"):
+        resolve_upload_path(None)

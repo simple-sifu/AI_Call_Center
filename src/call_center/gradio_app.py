@@ -141,14 +141,20 @@ def run_analyze(source: Path, *, settings: Settings) -> AnalyzeView:
     )
 
 
-def _analyze_handler(
-    audio_path: str | None,
-) -> tuple[str, str, str, str | None, str | None]:
-    if not audio_path:
-        raise gr.Error("Upload a call recording first.")
-    path = Path(audio_path)
+def resolve_upload_path(upload: str | None) -> Path:
+    """Turn a Gradio file/audio filepath into a readable ``Path``."""
+    if not upload:
+        raise gr.Error("Upload a WAV file first.")
+    path = Path(upload)
     if not path.is_file():
         raise gr.Error(f"Upload is not a file: {path}")
+    return path
+
+
+def _analyze_handler(
+    upload_path: str | None,
+) -> tuple[str, str, str, str | None, str | None]:
+    path = resolve_upload_path(upload_path)
     try:
         settings = load_settings()
     except ValidationError as error:
@@ -171,10 +177,16 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
         with gr.Tabs():
             with gr.Tab("Analyze Call"):
                 gr.Markdown(
-                    "Upload a recorded call (WAV). The pipeline runs all stages and persists "
-                    "JSON/PDF reports and audit entries."
+                    "Upload a **WAV** file (use **call_mono.wav** or **call_stereo.wav** in "
+                    "`tests/fixtures/` — not the 1 s `sample.wav`). Analysis can take several "
+                    "minutes on CPU. JSON/PDF reports and SQLite rows are written when the run "
+                    "finishes."
                 )
-                audio = gr.Audio(type="filepath", label="Call recording")
+                upload = gr.File(
+                    label="Call recording (WAV)",
+                    file_types=[".wav"],
+                    type="filepath",
+                )
                 analyze_btn = gr.Button("Analyze", variant="primary")
                 status_out = gr.Markdown(label="Status")
                 summary_out = gr.Markdown(label="Summary")
@@ -184,7 +196,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     pdf_out = gr.File(label="PDF report")
                 analyze_btn.click(
                     fn=_analyze_handler,
-                    inputs=audio,
+                    inputs=upload,
                     outputs=[status_out, summary_out, scores_out, json_out, pdf_out],
                 )
             with gr.Tab("Observability"):
