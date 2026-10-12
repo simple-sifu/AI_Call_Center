@@ -41,7 +41,10 @@ def run(state: PipelineState) -> dict:
     json_written = write_json(report, json_path)
     pdf_written = write_pdf(report, pdf_path)
     persist_call_report(
-        report, report_json_path=str(json_written), llm_provider=llm_provider_from_env()
+        report,
+        report_json_path=str(json_written),
+        report_pdf_path=str(pdf_written),
+        llm_provider=llm_provider_from_env(),
     )
 
     update: dict = {
