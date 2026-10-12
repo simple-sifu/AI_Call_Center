@@ -23,6 +23,7 @@ class PipelineState(TypedDict):
     status_reason: str | None
     report_output_dir: str | None
     report_json_path: str | None
+    report_pdf_path: str | None
 
 
 def initial_state(source_file: str, *, report_output_dir: str | None = None) -> PipelineState:
@@ -39,4 +40,5 @@ def initial_state(source_file: str, *, report_output_dir: str | None = None) -> 
         status_reason=None,
         report_output_dir=report_output_dir,
         report_json_path=None,
+        report_pdf_path=None,
     )

@@ -46,6 +46,7 @@ def _completed_report() -> CallReport:
         "status_reason": None,
         "report_output_dir": None,
         "report_json_path": None,
+        "report_pdf_path": None,
     }
     base = build_report(state)
     event = AuditEvent(stage="report", outcome="ok", detail="wrote /tmp/x.json")
@@ -113,6 +114,7 @@ def test_report_stage_persists_blocked_runs(monkeypatch, tmp_path):
             "status_reason": "prompt injection detected",
             "report_output_dir": str(tmp_path),
             "report_json_path": None,
+            "report_pdf_path": None,
         }
     )
 

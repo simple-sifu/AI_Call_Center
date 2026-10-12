@@ -15,6 +15,7 @@ dependencies = [
     "numpy>=2.4.6",
     "pydantic>=2",
     "pydantic-settings>=2.15.0",
+    "reportlab>=5.0.1",
     "sqlalchemy>=2.1.4",
 ]
 
@@ -22,7 +23,11 @@ dependencies = [
 call-center = "call_center.cli:main"
 
 [dependency-groups]
-dev = ["pytest", "ruff"]
+dev = [
+    "pypdf>=6.20.1",
+    "pytest",
+    "ruff",
+]
 
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]
