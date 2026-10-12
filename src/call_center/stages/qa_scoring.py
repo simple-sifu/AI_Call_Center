@@ -41,7 +41,7 @@ def system_prompt() -> str:
     return "\n\n".join(
         [
             _PROMPT_HEAD,
-            prompting.TRANSCRIPT_FRAMING,
+            prompting.TRANSCRIPT_FRAMING_SCORING,
             "Rubric:\n\n" + rubric.render(),
             _PROMPT_TAIL,
         ]

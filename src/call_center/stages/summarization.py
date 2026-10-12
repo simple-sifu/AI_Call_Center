@@ -27,7 +27,7 @@ NAME = "summarization"
 SYSTEM_PROMPT = f"""\
 You summarize customer service phone calls.
 
-{prompting.TRANSCRIPT_FRAMING}
+{prompting.TRANSCRIPT_FRAMING_SUMMARIZATION}
 
 Return:
 - call_purpose: one sentence on why the customer called.
