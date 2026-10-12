@@ -27,4 +27,4 @@ context: []
 
 ## Verification
 
-**Results (2026-10-12):** 1567 passed; ruff clean. Launch with ``uv run call-center ui``.
+**Results (2026-10-12):** 1567 passed; ruff clean. Launch with ``uv run call-center ui``. Follow-up: WAV ``File`` upload (not ``Audio``) for reliable fixture demos; see README.
