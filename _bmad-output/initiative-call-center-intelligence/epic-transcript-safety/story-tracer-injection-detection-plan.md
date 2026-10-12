@@ -3,7 +3,7 @@ title: 'Tracer: injection detection'
 type: 'feature'
 ticket: '1'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: 'e4e29a20183a7167163ecde8657b2fc1c770ada2'
 route: 'full'
 route_source: 'auto'
