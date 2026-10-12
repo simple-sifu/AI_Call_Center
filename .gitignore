@@ -22,6 +22,7 @@ _bmad/render/
 
 # Pipeline output
 reports/
+call_center.db
 
 # Local caches (transcript cache holds unredacted call text)
 .cache/
