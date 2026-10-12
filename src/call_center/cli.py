@@ -1,4 +1,4 @@
-"""Command-line entry point: ``call-center analyze <file> [--out DIR]``."""
+"""Command-line entry point: ``call-center analyze`` and ``call-center ui``."""
 
 import argparse
 import sys
@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from call_center.config import format_config_error, load_settings
+from call_center.gradio_app import launch as launch_ui
 from call_center.graph import run_pipeline
 from call_center.tracing import configure_tracing, flush_traces
 
@@ -17,6 +18,10 @@ def _parser() -> argparse.ArgumentParser:
     analyze = sub.add_parser("analyze", help="analyze a call recording")
     analyze.add_argument("file", help="path to the call audio file")
     analyze.add_argument("--out", default="reports", help="report output directory")
+    ui = sub.add_parser("ui", help="launch the Gradio web UI")
+    ui.add_argument("--host", default="127.0.0.1", help="bind address")
+    ui.add_argument("--port", type=int, default=7860, help="listen port")
+    ui.add_argument("--share", action="store_true", help="create a public Gradio link")
     return parser
 
 
@@ -27,6 +32,9 @@ def main(argv: list[str] | None = None) -> int:
     except ValidationError as error:
         print(f"invalid configuration: {format_config_error(error)}", file=sys.stderr)
         return 2
+    if args.command == "ui":
+        launch_ui(server_name=args.host, server_port=args.port, share=args.share, settings=settings)
+        return 0
     source = Path(args.file)
     if not source.exists():
         print(f"file not found: {args.file}", file=sys.stderr)
