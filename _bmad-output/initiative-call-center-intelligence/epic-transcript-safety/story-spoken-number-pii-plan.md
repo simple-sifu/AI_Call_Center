@@ -3,7 +3,7 @@ title: 'Spoken-number PII'
 type: 'feature'
 ticket: '4'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: '43c1a3126ea5e521a1e3b144d1455def537518ab'
 route: 'full'
 route_source: 'auto'
