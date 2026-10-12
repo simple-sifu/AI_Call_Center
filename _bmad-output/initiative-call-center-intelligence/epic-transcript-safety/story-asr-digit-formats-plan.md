@@ -3,7 +3,7 @@ title: 'ASR digit formats'
 type: 'feature'
 ticket: '7'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: '4477214e2a0ec15ef42c9431e0e60d3e015af641'
 route: 'full'
 route_source: 'auto'
