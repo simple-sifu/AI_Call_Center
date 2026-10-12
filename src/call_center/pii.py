@@ -1,8 +1,9 @@
 """PII detection and redaction for transcript text.
 
 Finds SSNs, payment card numbers (Luhn-checked), email addresses (written and spoken) and
-North American phone numbers written as digits, and replaces each with ``[SSN]``,
-``[CARD]``, ``[EMAIL]`` or ``[PHONE]``. Every other character is left byte-identical.
+North American phone numbers, written as digits or read out as number words, and replaces
+each with ``[SSN]``, ``[CARD]``, ``[EMAIL]`` or ``[PHONE]``. Every other character is left
+byte-identical.
 
 Emails (written, then spoken) are found first, so digits inside an address cannot break it
 up. Then SSN and phone candidates are found. Then each run of digit groups joined by single
@@ -19,17 +20,35 @@ never half-redacted as phones. The SSN/phone candidates then claim what cards an
 runs left. Each pass runs on a working copy where claimed spans are masked out, so offsets
 stay aligned with the original text. Every quantifier is bounded.
 
+Then spoken numbers, over the text with the written values masked, so a written value is
+never changed by them. Each spoken run (number words and the plain digit groups left, see
+``spoken_numbers``) is read as digits, and that reading goes through the written-digit
+passes above unchanged. A run is redacted whole or not at all. When the passes find values
+in it, each stretch of digits they leave uncovered joins the value before it (or after it,
+when none is before), except that a stretch of 7 or more digits, 3 or more of them from
+number words, is a value of its own. When they find none, the run is one value if it holds
+7 or more digits with 3 or more from number words; otherwise it is kept. A spoken value is
+labelled by its digit count: 9 ``[SSN]``, 12 or more ``[CARD]``, otherwise ``[PHONE]``; its
+placeholder covers its first to its last token, and, when it covers a closing parenthesis
+whose opening one sits just before it, that one too. A run that is kept but holds 3 or more
+digits from number words, directly next to a written value (only a separator between), is
+absorbed into that value's placeholder (``five five five 123-4567``). Text without number
+words is untouched by this pass.
+
 Text from several segments is joined with a space, and the join space is always kept. At a
 join only, a hyphen next to the join space (``123-45-`` + ``6789`` or ``123-45`` +
 ``-6789``) also counts as one separator: the working copy holds the hyphen then a marker
 in place of the two characters; this only adds matches,
 since the marker still ends a digit run like a space does. A phone's ``1``/``+1`` prefix is
-never taken from an earlier segment.
+never taken from an earlier segment. A spoken run may cross a join; there the join is a
+group separator in the run's digit reading, and the prefix rule holds there too.
 """
 
 import re
 from bisect import bisect_left, bisect_right
 from collections.abc import Callable, Sequence
+
+from call_center import spoken_numbers
 
 SSN = "SSN"
 CARD = "CARD"
@@ -59,6 +78,10 @@ _DIGIT_GROUP = re.compile(r"[0-9]{1,64}")
 # What may join two groups of a card candidate run.
 _GROUP_SEPARATORS = frozenset({" ", "-", "-" + _JOIN})
 _CARD_MIN, _CARD_MAX = 13, 19
+# A spoken run (or an uncovered stretch of one) is a value of its own with this many
+# digits, this many of them from number words; a run kept that holds this many number-word
+# digits is absorbed into a written value next to it.
+_SPOKEN_VALUE_DIGITS, _SPOKEN_WORD_DIGITS = 7, 3
 # Runs shaped like one number, by group lengths: 13-19 unbroken digits; four groups of four
 # with an optional final group of 1-3; or 4-6-5.
 _ONE_NUMBER_SHAPE = re.compile(r"1[3-9]|4,4,4,4(?:,[1-3])?|4,6,5")
@@ -202,8 +225,11 @@ def _card_windows(
             if b - a >= _CARD_MIN:
                 totals = luhn[(b - 1) % 2]
                 if totals[b] == totals[a] and (accept is None or accept(run[i][0], run[j][1])):
-                    shape = ",".join(str(e - s) for s, e in run[i : j + 1])
-                    rank = 0 if _CARD_SHAPE.fullmatch(shape) else 3
+                    # Only 1, 3, 4 or 5 groups can be card-shaped.
+                    shaped = j - i in (0, 2, 3, 4) and _CARD_SHAPE.fullmatch(
+                        ",".join(str(e - s) for s, e in run[i : j + 1])
+                    )
+                    rank = 0 if shaped else 3
                     rank += 0 if b - a == 16 else 1 if b - a == 15 else 2
                     found.append((rank, i, j))
             j += 1
@@ -246,13 +272,17 @@ def _choose_cards(windows: Sequence[tuple[int, int, int]], groups: int) -> list[
             stop += 1
         left: list[tuple[int, int]] = []
         for _, i, j in windows[start:stop]:
-            if all(o is None for o in owner[i : j + 1]):
+            if owner[i : j + 1].count(None) == j + 1 - i:
                 claim(rank, i, j, set())
             else:
                 left.append((i, j))
         for i, j in left:
-            hit = {find(o) for o in owner[i : j + 1] if o is not None}
-            if None in owner[i : j + 1] and all(ranks[h] == rank for h in hit):
+            labels = set(owner[i : j + 1])
+            if None not in labels:
+                continue
+            labels.discard(None)
+            hit = {find(o) for o in labels}
+            if all(ranks[h] == rank for h in hit):
                 claim(rank, i, j, hit)
         start = stop
 
@@ -308,21 +338,16 @@ def _window_check(candidates: Sequence[_Span]) -> Callable[[int, int], bool]:
     return accept
 
 
-def _find(text: str, joins: Sequence[int] = ()) -> list[_Span]:
-    """Non-overlapping PII spans in ``text``, sorted by start. ``joins`` are the offsets of
-    the spaces that join segments."""
+def _digit_spans(view: str, joins: Sequence[int]) -> list[_Span]:
+    """SSN, card and phone spans in ``view`` (a working copy with joins marked), sorted by
+    start. ``joins`` are the offsets of the spaces that join segments."""
     found: list[_Span] = []
-    work = text
-    for kind, pattern in _EMAIL_PASSES:
-        new = [(m.start(), m.end()) for m in pattern.finditer(work)]
-        found.extend((start, end, kind) for start, end in new)
-        work = _mask(work, new)
-
-    view = _mark_joins(work, joins)
     candidates = _digit_candidates(view, joins)
     accept = _window_check(candidates)
     blocked: list[tuple[int, int]] = []
     for run in _digit_runs(view):
+        if run[-1][1] - run[0][0] < _CARD_MIN:
+            continue  # Fewer than 13 digits: no card, and not shaped like one number.
         cards = _choose_cards(_card_windows(view, run, accept), len(run))
         for i, j in cards:
             found.append((run[i][0], run[j][1], CARD))
@@ -341,6 +366,143 @@ def _find(text: str, joins: Sequence[int] = ()) -> list[_Span]:
         found.append((start, end, kind))
     found.sort()
     return found
+
+
+def _spoken_kind(digits: int) -> str:
+    return SSN if digits == 9 else CARD if digits >= 12 else PHONE
+
+
+def _run_values(
+    view: str, spoken: Sequence[bool], digits: Sequence[int], joins: Sequence[int]
+) -> list[tuple[int, int, int]]:
+    """The values of a spoken run's reading ``view`` as (first, last, digit count),
+    ``first`` and ``last`` being ``view`` offsets; empty when the run is kept. ``digits``
+    are the offsets of the digits in ``view``, ``joins`` those of separators from a segment
+    join."""
+    spoken_digits = sum(spoken[i] for i in digits)
+    found = _digit_spans(view, joins) if len(digits) >= _SPOKEN_VALUE_DIGITS else []
+    if not found:
+        if len(digits) >= _SPOKEN_VALUE_DIGITS and spoken_digits >= _SPOKEN_WORD_DIGITS:
+            return [(digits[0], digits[-1], len(digits))]
+        return []
+    owner = [-1] * len(view)
+    for k, (start, end, _) in enumerate(found):
+        owner[start:end] = [k] * (end - start)
+    # The run in order as values and uncovered stretches: [first, last, digits, spoken,
+    # value index or -1].
+    pieces: list[list[int]] = []
+    for i in digits:
+        k = owner[i]
+        if pieces and pieces[-1][4] == k:
+            piece = pieces[-1]
+            piece[1], piece[2], piece[3] = i, piece[2] + 1, piece[3] + spoken[i]
+        else:
+            first = found[k][0] if k >= 0 else i
+            pieces.append([first, i, 1, int(spoken[i]), k])
+    values: list[list[int]] = []
+    before: list[int] | None = None  # the last value found by the passes
+    leading: list[int] | None = None  # an uncovered stretch before every such value
+    for first, last, count, words, k in pieces:
+        if k >= 0:
+            value = [first, last, count]
+            if leading is not None:
+                value[0], value[2] = leading[0], value[2] + leading[2]
+                leading = None
+            values.append(value)
+            before = value
+        elif count >= _SPOKEN_VALUE_DIGITS and words >= _SPOKEN_WORD_DIGITS:
+            values.append([first, last, count])
+        elif before is not None:
+            before[1], before[2] = last, before[2] + count
+        else:
+            leading = [first, last, count]
+    return [(first, last, count) for first, last, count in values]
+
+
+def _spoken_pass(
+    text: str, work: str, joins: Sequence[int], written: Sequence[_Span]
+) -> tuple[list[_Span], list[_Span]]:
+    """The spoken-number pass over ``work`` (``text`` with emails and the written values
+    ``written`` masked). Returns ``written`` with the kept runs next to them absorbed, and
+    the spans of the spoken values, all in ``text`` offsets."""
+    out = list(written)
+    starts = [start for start, _, _ in written]
+    spans: list[_Span] = []
+    for run in spoken_numbers.find_runs(work, joins):
+        view, index_map, run_joins, spoken = spoken_numbers.digit_reading(run)
+        digits = [i for i, ch in enumerate(view) if ch in _ASCII_DIGITS]
+        values = _run_values(view, spoken, digits, run_joins)
+        for first, last, count in values:
+            lo, hi = index_map[first], index_map[last]
+            assert lo is not None and hi is not None
+            spans.append((lo[0], hi[1], _spoken_kind(count)))
+        if values or sum(spoken[i] for i in digits) < _SPOKEN_WORD_DIGITS:
+            continue
+        # A kept run directly next to a written value (only a separator between) joins
+        # its placeholder; the value after the run is tried first.
+        nxt = bisect_left(starts, run.end)
+        for k, after in ((nxt, True), (nxt - 1, False)):
+            if not 0 <= k < len(written):
+                continue
+            w_start, w_end, _ = written[k]
+            lo, hi = (run.end, w_start) if after else (w_end, run.start)
+            if lo <= hi and spoken_numbers.separator(text, lo, hi, joins) is not None:
+                o_start, o_end, kind = out[k]
+                out[k] = (min(o_start, run.start), max(o_end, run.end), kind)
+                break
+    return out, spans
+
+
+def _open_paren(text: str, start: int, end: int) -> int:
+    """``start``, moved back over whitespace to an opening parenthesis just before it when
+    ``text[start:end]`` holds a closing one it does not open itself."""
+    if ")" not in text[start:end]:
+        return start
+    depth = unmatched = 0
+    for ch in text[start:end]:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            if depth:
+                depth -= 1
+            else:
+                unmatched += 1
+    if not unmatched:
+        return start
+    i = start - 1
+    while i >= 0 and text[i].isspace():
+        i -= 1
+    return i if i >= 0 and text[i] == "(" else start
+
+
+def _find(text: str, joins: Sequence[int] = ()) -> list[_Span]:
+    """Non-overlapping PII spans in ``text``, sorted by start. ``joins`` are the offsets of
+    the spaces that join segments."""
+    found: list[_Span] = []
+    work = text
+    for kind, pattern in _EMAIL_PASSES:
+        new = [(m.start(), m.end()) for m in pattern.finditer(work)]
+        found.extend((start, end, kind) for start, end in new)
+        work = _mask(work, new)
+
+    written = _digit_spans(_mark_joins(work, joins), joins)
+    work = _mask(work, [(start, end) for start, end, _ in written])
+    written, spoken = _spoken_pass(text, work, joins, written)
+    found.extend(written)
+    found.extend(spoken)
+    found.sort()
+    # A word that reads as several digits (``twelve``) can feed two spoken values; the later
+    # one then starts after the earlier, so the spans stay disjoint. Only spoken tokens can
+    # be shared, so a written value is never cut. A span covering a closing parenthesis also
+    # covers its opening one when nothing else has claimed it.
+    out: list[_Span] = []
+    for start, end, kind in found:
+        prev_end = out[-1][1] if out else 0
+        opened = _open_paren(text, start, end)
+        start = max(opened if opened >= prev_end else start, prev_end)
+        if start < end:
+            out.append((start, end, kind))
+    return out
 
 
 def _counts(spans: Sequence[_Span]) -> dict[str, int]:
