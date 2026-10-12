@@ -3,7 +3,7 @@ title: 'Full 22-pattern injection catalogue'
 type: 'feature'
 ticket: '2'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: 'cab00169f99513d84565b3dcc45e525dd8ae1d2d'
 route: 'full'
 route_source: 'auto'
