@@ -50,3 +50,36 @@ class FakeTranscriber:
 
     def transcribe(self, path):
         return self.segments
+
+
+FAKE_SUMMARY = {
+    "call_purpose": "The customer asked why their card payment was declined.",
+    "action_items": ["Agent re-sends the payment link."],
+    "sentiment_trajectory": {"opening": "negative", "middle": "neutral", "closing": "positive"},
+    "entities": [{"text": "[CARD]", "type": "placeholder"}],
+}
+
+
+class FakeChatModel:
+    """Fake chat model: answers every structured-output call with ``output``.
+
+    Set ``output`` to another dict to change the answer, or to an exception to raise it.
+    ``calls`` holds the messages of each call, ``schemas`` the requested schemas and
+    ``settings`` the settings each factory call received.
+    """
+
+    def __init__(self) -> None:
+        self.output: object = dict(FAKE_SUMMARY)
+        self.calls: list[list] = []
+        self.schemas: list[object] = []
+        self.settings: list[object] = []
+
+    def with_structured_output(self, schema, **kwargs):
+        self.schemas.append(schema)
+        return self
+
+    def invoke(self, messages, *args, **kwargs):
+        self.calls.append(list(messages))
+        if isinstance(self.output, BaseException):
+            raise self.output
+        return self.output
