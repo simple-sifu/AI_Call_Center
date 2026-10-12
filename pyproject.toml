@@ -8,6 +8,7 @@ dependencies = [
     "av>=11,<19",
     "faster-whisper>=1.2.1",
     "langchain-core>=1.6.9",
+    "langchain-openai>=1.7.0",
     "langgraph",
     "numpy>=2.4.6",
     "pydantic>=2",
@@ -34,7 +35,7 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers -m 'not slow'"
+addopts = "--strict-markers -m 'not slow and not live'"
 # Some tests write 30-50 MB files; keep temp dirs only for failed tests.
 tmp_path_retention_policy = "failed"
 markers = [
@@ -42,4 +43,5 @@ markers = [
     "integration: tests that run the pipeline end to end",
     "security: tests that guard security constraints",
     "slow: loads a real ASR model; opt in with -m slow",
+    "live: calls a real LLM provider and reads the real .env; opt in with -m live",
 ]
