@@ -3,7 +3,7 @@ title: 'Tracer: provider factory and real summarization'
 type: 'feature'
 ticket: '1'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: '1b6fa07c31000eb5102323b41fd562d3585dc292'
 route: 'full'
 route_source: 'auto'
