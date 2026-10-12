@@ -2,7 +2,8 @@
 
 Reads only ``redacted_transcript``. The transcript goes to the model as speaker-labelled
 lines between ``<transcript>`` delimiters, and the system prompt says it is data, not
-instructions. The model answers in structured output, which is validated with
+instructions. The model answers in structured output, asked for the way the factory says
+suits the provider (``llm.structured_output_args``), and the answer is validated with
 ``Summary.model_validate``; nothing else reaches the state. One call per run, no retries.
 
 Any failure (configuration, missing key, provider error, invalid output) sets status
@@ -104,7 +105,7 @@ def run(state: PipelineState) -> dict:
     except llm.LLMConfigError as error:
         return _failed(str(error))
     try:
-        structured = model.with_structured_output(Summary.model_json_schema(), method="json_schema")
+        structured = model.with_structured_output(**llm.structured_output_args(provider, Summary))
         answer = structured.invoke(messages(redacted))
     except _INVALID_OUTPUT:
         return _failed(f"{provider} returned invalid output")

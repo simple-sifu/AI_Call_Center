@@ -8,6 +8,8 @@ dependencies = [
     "av>=11,<19",
     "faster-whisper>=1.2.1",
     "langchain-core>=1.6.9",
+    "langchain-google-genai>=4.4.1",
+    "langchain-groq>=1.1.3",
     "langchain-openai>=1.7.0",
     "langgraph",
     "numpy>=2.4.6",

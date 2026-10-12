@@ -64,18 +64,21 @@ class FakeChatModel:
     """Fake chat model: answers every structured-output call with ``output``.
 
     Set ``output`` to another dict to change the answer, or to an exception to raise it.
-    ``calls`` holds the messages of each call, ``schemas`` the requested schemas and
-    ``settings`` the settings each factory call received.
+    ``calls`` holds the messages of each call, ``schemas`` the requested schemas,
+    ``methods`` the requested structured-output methods and ``settings`` the settings
+    each factory call received.
     """
 
     def __init__(self) -> None:
         self.output: object = dict(FAKE_SUMMARY)
         self.calls: list[list] = []
         self.schemas: list[object] = []
+        self.methods: list[object] = []
         self.settings: list[object] = []
 
     def with_structured_output(self, schema, **kwargs):
         self.schemas.append(schema)
+        self.methods.append(kwargs.get("method"))
         return self
 
     def invoke(self, messages, *args, **kwargs):
