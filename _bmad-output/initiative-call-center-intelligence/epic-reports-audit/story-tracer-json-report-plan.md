@@ -3,7 +3,7 @@ title: 'Tracer: JSON report from pipeline state'
 type: 'feature'
 ticket: '1'
 created: '2026-10-12'
-status: built
+status: done
 baseline_revision: 'c2cce12'
 route: 'full'
 route_source: 'auto'
