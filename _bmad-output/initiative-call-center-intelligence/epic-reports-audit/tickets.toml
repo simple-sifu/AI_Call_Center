@@ -1,0 +1,67 @@
+# Epic 5 breakdown, in build order. Table order is build order; ids are permanent names.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Tracer: JSON report from pipeline state"
+description = "Defines the canonical JSON report shape from final pipeline state (real status, stages_completed, status_reason, audit trail, summary and qa_scores when present, redacted_transcript only — never the raw transcript). Replaces the CLI stub JSON and the report stage stub: the stage finalizes status completed when still running, writes `<stem>.json` under a configurable output directory (CLI --out seeds it via settings or run context), and returns report paths in its stage update. Blocked and failed runs still get a full JSON record."
+verify = "`uv run call-center analyze tests/fixtures/sample.wav` writes JSON whose status is completed (not stub) with summary, scores, and audit; blocked and failed CLI paths still write JSON and exit 2; pytest and ruff pass."
+covers = ["CAP-7"]
+after = ["4.6"]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "SQLite persistence and append-only audit"
+description = "Adds SQLAlchemy + SQLite: a calls row per analyzed run (source path, status, reason, provider, overall when scored, timestamps) and append-only audit rows mirroring state audit events. The report stage inserts; the application exposes no update or delete API for audit rows. Persist redacted transcript and analysis fields as JSON text; do not store the raw transcript."
+verify = "After analyze, the DB holds one call row and one audit row per stage that ran; tests prove no public path updates or deletes audit entries; blocked and failed runs persist too."
+covers = ["CAP-7"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "PDF report generation"
+description = "Adds ReportLab: the report stage writes `<stem>.pdf` alongside JSON with the same facts (purpose, scores, overall, audit summary) suitable for a QA reviewer download."
+verify = "Completed, blocked, and failed runs each leave a PDF next to the JSON; a test compares key fields between the two formats."
+covers = ["CAP-7"]
+after = [2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Observability persistence fields"
+description = "Extends the call row with the metrics Epic 6's Observability tab will read: llm_provider, final status, overall score, analyzed_at, and per-stage outcomes derived from audit (latency/token fields nullable until tracing exposes them)."
+verify = "Unit tests show the persisted row contains the agreed fields for completed, blocked, and failed fixture runs."
+covers = ["CAP-7"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup only across the epic, scoped from plans and deferred review findings."
+verify = "pytest and ruff pass with no behavior change."
+covers = []
+after = [1, 2, 3, 4]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 6
+type = "story"
+title = "End-to-end reports suite"
+description = "Integration tests: happy path, blocked, and failed runs each produce JSON, PDF, and DB rows that agree; CLI exit codes unchanged."
+verify = "New integration module passes offline; existing pipeline and security tests unchanged in behaviour."
+covers = ["CAP-7"]
+after = [5]
+hitl = false
+risk = "medium"

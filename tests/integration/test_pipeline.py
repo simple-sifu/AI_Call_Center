@@ -41,18 +41,29 @@ def test_run_pipeline_final_state_matches_contract():
     for event, name in zip(state["audit"], EXPECTED, strict=True):
         assert isinstance(event, AuditEvent)
         AuditEvent.model_validate(event.model_dump())
-        assert (event.stage, event.outcome) == (name, "ok")
+        assert event.stage == name
+        assert event.outcome == "ok"
+        if name == "report":
+            assert event.detail.startswith("wrote ")
+    assert state["report_json_path"]
+    report = json.loads(Path(state["report_json_path"]).read_text())
+    assert report["status"] == "completed"
+    assert report["summary"] is not None
+    assert report["qa_scores"]["overall"] == 77.0
+    assert "transcript" not in report
 
 
 def test_cli_happy_path_writes_report(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     assert main(["analyze", str(SAMPLE)]) == 0
     out = Path("reports") / "sample.json"
-    assert capsys.readouterr().out.strip() == str(out)
+    assert Path(capsys.readouterr().out.strip()) == out.resolve()
     report = json.loads(out.read_text())
     assert report["source_file"] == str(SAMPLE)
-    assert report["status"] == "stub"
+    assert report["status"] == "completed"
     assert report["stages_completed"] == EXPECTED
+    assert report["summary"] is not None
+    assert report["qa_scores"] is not None
 
 
 def test_cli_custom_out_dir_is_created(tmp_path, capsys):
@@ -119,12 +130,14 @@ def test_cli_rejected_file_writes_report_and_exits_2(tmp_path, monkeypatch, caps
     assert main(["analyze", str(fake)]) == 2
     out = Path("reports") / "fake.json"
     captured = capsys.readouterr()
-    assert captured.out.strip() == str(out)
+    assert Path(captured.out.strip()) == out.resolve()
     assert captured.err.startswith("rejected: unsupported format")
     assert captured.err.count("\n") == 1
     report = json.loads(out.read_text())
     assert report["source_file"] == str(fake)
+    assert report["status"] == "failed"
     assert report["stages_completed"] == ["intake", "report"]
+    assert report["status_reason"].startswith("rejected:")
 
 
 def test_cli_transcription_failure_exits_2(tmp_path, monkeypatch, capsys):

@@ -1,6 +1,7 @@
 """LangGraph wiring for the pipeline. The stage order lives only in STAGES."""
 
 from itertools import pairwise
+from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
 
@@ -52,5 +53,6 @@ def build_graph():
     return graph.compile()
 
 
-def run_pipeline(path: str) -> dict:
-    return build_graph().invoke(initial_state(path))
+def run_pipeline(path: str, *, report_output_dir: Path | str | None = None) -> dict:
+    out = str(report_output_dir) if report_output_dir is not None else None
+    return build_graph().invoke(initial_state(path, report_output_dir=out))

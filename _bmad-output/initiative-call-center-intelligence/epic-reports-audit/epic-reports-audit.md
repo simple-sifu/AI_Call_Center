@@ -37,6 +37,7 @@ Stage 7 and the persistence layer. Not the UI.
 
 ## Notes
 
-- Open question: the Observability metrics (spec OQ 6) must be settled before this epic's inception, since this epic persists them.
-- Open question: whether raw or unredacted text may be stored (spec OQ 4).
+- Decision: persistence stores **redacted transcript and analysis results only**, never the raw transcript (user inception Epic 5, 2026-10-12; resolves spec OQ 4 for the DB/reports path). The local transcript cache may still hold raw text, as already decided.
+- Decision: Observability persistence (spec OQ 6) for Epic 5 is **provider, status, overall, analyzed_at, and per-stage audit outcomes**; token/cost/latency columns are nullable until LangSmith or the LLM layer exposes them to the report stage (2026-10-12). Epic 6 reads these columns; it does not redefine them.
 - Waits on epic-llm-analysis because: reports render its summary and scores.
+- Breakdown: `epic-reports-audit/tickets.toml` — JSON tracer (5.1), SQLite audit (5.2), PDF (5.3), observability columns (5.4), refactor (5.5), e2e suite (5.6).
