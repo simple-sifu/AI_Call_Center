@@ -3,7 +3,7 @@ title: 'Retry and failure policy'
 type: 'feature'
 ticket: '3'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: '3362b4e4ce9e850ea11058168406e74b258346eb'
 route: 'full'
 route_source: 'auto'
