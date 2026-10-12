@@ -110,6 +110,38 @@ def test_only_summary_fields_reach_the_state(fake_chat_model):
 def test_asks_for_the_summary_schema(fake_chat_model):
     summarization.run(_state())
     assert fake_chat_model.schemas == [Summary.model_json_schema()]
+    assert fake_chat_model.methods == ["json_schema"]
+
+
+@pytest.mark.parametrize(
+    ("provider", "model", "schema", "method"),
+    [
+        ("openai", "gpt-4o", Summary.model_json_schema(), "json_schema"),
+        ("gemini", "gemini-2.0-flash", Summary, "function_calling"),
+        ("groq", "llama-3.3-70b-versatile", Summary, "function_calling"),
+    ],
+)
+def test_one_variable_switches_the_provider(
+    monkeypatch, fake_chat_model, provider, model, schema, method
+):
+    monkeypatch.setenv("LLM_PROVIDER", provider)
+    state = run_pipeline(str(SAMPLE))
+    assert state["status"] == "completed"
+    assert state["stages_completed"] == STAGES
+    assert state["summary"] == Summary.model_validate(FAKE_SUMMARY)
+    [event] = [e for e in state["audit"] if e.stage == "summarization"]
+    assert (event.outcome, event.detail) == ("ok", f"summarized with {provider} {model}")
+    assert fake_chat_model.schemas == [schema]
+    assert fake_chat_model.methods == [method]
+    assert [s.llm_provider for s in fake_chat_model.settings] == [provider]
+
+
+@pytest.mark.parametrize("provider", ["gemini", "groq"])
+def test_tool_calling_answer_as_a_summary_instance(monkeypatch, fake_chat_model, provider):
+    monkeypatch.setenv("LLM_PROVIDER", provider)
+    fake_chat_model.output = Summary.model_validate(FAKE_SUMMARY)
+    result = summarization.run(_state())
+    assert result["summary"] == Summary.model_validate(FAKE_SUMMARY)
 
 
 # The prompt
@@ -256,10 +288,37 @@ def test_missing_key_cli_exits_2_without_any_key_value(monkeypatch, tmp_path, ca
     assert "gsk-not-a-real-key-42" not in captured.err + captured.out + report
 
 
-def test_unsupported_provider_fails_the_stage(monkeypatch):
+@pytest.mark.parametrize(
+    ("provider", "names"),
+    [("gemini", "GEMINI_API_KEY / GOOGLE_API_KEY"), ("groq", "GROQ_API_KEY")],
+)
+def test_missing_gemini_or_groq_key_fails_the_stage(monkeypatch, provider, names):
     monkeypatch.setattr(llm, "get_chat_model", real_get_chat_model)
-    monkeypatch.setenv("LLM_PROVIDER", "groq")
-    _assert_failed(summarization.run(_state()), "summarization failed: groq is not supported yet")
+    monkeypatch.setenv("LLM_PROVIDER", provider)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-not-a-real-key-42")  # no fallback to it
+    result = summarization.run(_state())
+    _assert_failed(result, f"summarization failed: {provider} API key missing (set {names})")
+    assert "sk-not-a-real-key-42" not in result["status_reason"]
+
+
+@pytest.mark.parametrize(
+    ("provider", "names"),
+    [("gemini", "GEMINI_API_KEY / GOOGLE_API_KEY"), ("groq", "GROQ_API_KEY")],
+)
+def test_missing_key_cli_exits_2_for_gemini_and_groq(
+    monkeypatch, tmp_path, capsys, provider, names
+):
+    monkeypatch.setattr(llm, "get_chat_model", real_get_chat_model)
+    monkeypatch.setenv("LLM_PROVIDER", provider)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-not-a-real-key-42")  # another provider's only
+    assert main(["analyze", str(SAMPLE), "--out", str(tmp_path)]) == 2
+    captured = capsys.readouterr()
+    assert captured.err.strip() == (
+        f"summarization failed: {provider} API key missing (set {names})"
+    )
+    report = (tmp_path / "sample.json").read_text()
+    assert json.loads(report)["stages_completed"] == FAILED_STAGES
+    assert "sk-not-a-real-key-42" not in captured.err + captured.out + report
 
 
 def test_missing_redacted_transcript_fails_without_calling_the_model(fake_chat_model):

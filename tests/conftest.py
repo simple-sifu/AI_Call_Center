@@ -45,7 +45,8 @@ def _isolated_config(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyP
 
     # setenv then delenv records each name, so anything a test (or the CLI) writes to
     # os.environ is undone afterwards, even for names that were not set before.
-    for name in ENV_VARS:
+    # Also the variables that would switch Gemini to Vertex AI.
+    for name in (*ENV_VARS, "GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_GENAI_USE_ENTERPRISE"):
         for variant in (name, name.lower()):
             monkeypatch.setenv(variant, "")
             monkeypatch.delenv(variant)
