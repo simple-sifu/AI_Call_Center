@@ -131,9 +131,11 @@ def test_one_variable_switches_the_provider(
     assert state["summary"] == Summary.model_validate(FAKE_SUMMARY)
     [event] = [e for e in state["audit"] if e.stage == "summarization"]
     assert (event.outcome, event.detail) == ("ok", f"summarized with {provider} {model}")
-    assert fake_chat_model.schemas == [schema]
-    assert fake_chat_model.methods == [method]
-    assert [s.llm_provider for s in fake_chat_model.settings] == [provider]
+    # Summarization's call, then QA scoring's.
+    assert fake_chat_model.schemas[0] == schema
+    assert fake_chat_model.call_schemas == ["Summary", "QAScores"]
+    assert fake_chat_model.methods == [method, method]
+    assert [s.llm_provider for s in fake_chat_model.settings] == [provider, provider]
 
 
 @pytest.mark.parametrize("provider", ["gemini", "groq"])
@@ -372,7 +374,7 @@ def test_pipeline_holds_the_fake_summary_and_keeps_the_stage_order(fake_chat_mod
     assert state["summary"] == Summary.model_validate(FAKE_SUMMARY)
     [event] = [e for e in state["audit"] if e.stage == "summarization"]
     assert (event.outcome, event.detail) == ("ok", "summarized with openai gpt-4o")
-    assert len(fake_chat_model.calls) == 1
+    assert fake_chat_model.call_schemas == ["Summary", "QAScores"]  # one call per LLM stage
 
 
 # Retries and the failure policy (story 4.3)
