@@ -3,7 +3,7 @@ title: 'SQLite persistence and append-only audit'
 type: 'feature'
 ticket: '2'
 created: '2026-10-12'
-status: built
+status: done
 baseline_revision: 'edd9f8d'
 route: 'full'
 route_source: 'auto'
